@@ -6,6 +6,14 @@ Parameters:
   Stage:
     Type: String
     Default: prod
+  Paused:
+    Type: String
+    Default: "false"
+    AllowedValues: ["true", "false"]
+    Description: When "true", CloudFront is disabled and the API throttles to zero. Data is kept.
+
+Conditions:
+  IsPaused: !Equals [!Ref Paused, "true"]
 
 Globals:
   Function:
@@ -40,7 +48,7 @@ Resources:
     Type: AWS::CloudFront::Distribution
     Properties:
       DistributionConfig:
-        Enabled: true
+        Enabled: !If [IsPaused, false, true]
         DefaultRootObject: index.html
         PriceClass: PriceClass_100
         HttpVersion: http2and3
@@ -88,8 +96,8 @@ Resources:
     Properties:
       StageName: !Ref Stage
       DefaultRouteSettings:
-        ThrottlingBurstLimit: 20
-        ThrottlingRateLimit: 10
+        ThrottlingBurstLimit: !If [IsPaused, 0, 20]
+        ThrottlingRateLimit: !If [IsPaused, 0, 10]
 
   HealthFunction:
     Type: AWS::Serverless::Function

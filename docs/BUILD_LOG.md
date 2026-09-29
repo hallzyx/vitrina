@@ -21,3 +21,11 @@ Format: `date-time (America/Lima) · what was requested · what the agent did ·
 - **Done (agent):** SAM CLI 1.166.2 installed with `winget install Amazon.SAM-CLI`; `sam validate --lint` passes on `infra/template.yaml`.
 - **Verification (agent, MCP `run_script` as `user/vitrina-agent`):** IAM GetPolicy → default v2 on both; Budgets DescribeBudgets/DescribeNotificationsForBudget → 1 budget, thresholds 50/80/100.
 - **Spending cap:** USD 20/month; watched by the account owner.
+
+## 2026-09-29 · First deployment: skeleton stack `vitrina` (us-east-1)
+- **Requested:** deploy the minimal skeleton (S3 + CloudFront + `GET /health`) and provide a way to pause and destroy everything. Cost estimate given beforehand (~USD 0); user confirmed.
+- **Done (agent, as `user/vitrina-agent`):** added `Paused` parameter + `IsPaused` condition to `infra/template.yaml` (disables CloudFront, throttles the API to 0), added `scripts/deploy.sh`, `scripts/pause.sh`, `scripts/destroy.sh`; `sam validate --lint`, `sam build`, `sam deploy` (`--resolve-s3 --capabilities CAPABILITY_IAM`, tag `project=vitrina`); uploaded `frontend/index.html`; CloudFront invalidation.
+- **Resources:** stack `vitrina`; bucket `vitrina-frontendbucket-zdyg5a5lrtjb`; CloudFront distribution `E2QFDRCIB8GU97` (https://dz81nhpgrhb93.cloudfront.net); HTTP API `uksp9t9yrj` (https://uksp9t9yrj.execute-api.us-east-1.amazonaws.com/prod); Lambda `HealthFunction`; SAM-managed artifact bucket (stack `aws-sam-cli-managed-default`).
+- **Verification:** `GET /prod/health` → 200 `{"status": "ok", "service": "vitrina"}`; site `/` → 200 with `<title>Vitrina</title>`; `/s/example` → 200 (SPA fallback).
+- **Not yet tested:** `scripts/pause.sh` and `scripts/destroy.sh` (only written).
+- **Tools:** AWS SAM CLI 1.166.2, AWS CLI (`s3 cp`, `cloudfront create-invalidation`), curl.

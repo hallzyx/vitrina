@@ -114,7 +114,20 @@ sam build
 sam deploy --guided             # region: us-east-1
 ```
 
-The stack outputs the public site URL, the API URL, the frontend bucket and the CloudFront distribution ID.
+The stack outputs the public site URL, the API URL, the frontend bucket and the CloudFront distribution ID. The scripts below wrap the same steps (`SAM=/path/to/sam` if `sam` is not on your PATH).
+
+## ⏯️ Pause, resume and destroy
+
+Everything is infrastructure as code, so it can be switched off and removed cleanly.
+
+| Action | Command | Effect |
+|---|---|---|
+| **Deploy / update** | `scripts/deploy.sh` | Builds and deploys the `vitrina` stack in `us-east-1`. |
+| **Pause** | `scripts/pause.sh` | Sets `Paused=true`: CloudFront is disabled and the API throttles to zero. Data is kept. |
+| **Resume** | `scripts/pause.sh resume` | Sets `Paused=false` and brings the site back. |
+| **Destroy** | `scripts/destroy.sh` | Empties the buckets and deletes the stack. **Irreversible.** |
+
+CloudFront takes a few minutes to apply enabling/disabling. The GPU branch (3D) never runs idle: SageMaker inference scales to zero.
 
 ## 🚦 Status
 
@@ -123,7 +136,7 @@ Built for the AWS **Zero to Shipped** hackathon (Sep 18 – Oct 2, 2026).
 - [x] Specification, plan and setup docs
 - [x] Limited IAM user, permissions boundary and USD 20/month budget alarm
 - [x] SAM skeleton: S3 + CloudFront + `GET /health`
-- [ ] Skeleton deployed with a public URL
+- [x] Skeleton deployed with a public URL → https://dz81nhpgrhb93.cloudfront.net
 - [ ] 360° pipeline end to end (Step Functions + Bedrock)
 - [ ] Storefront, viewer, dashboard, example store (`/s/example`)
 - [ ] Optional 3D branch (`ENABLE_3D`)
