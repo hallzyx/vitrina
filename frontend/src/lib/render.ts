@@ -28,14 +28,14 @@ const smooth = (a: number, b: number, x: number) => {
 const fract = (x: number) => x - Math.floor(x);
 
 /** Vertical extent of each shape, as a fraction of the canvas. */
-const GEOMETRY: Record<Shape, { top: number; bottom: number }> = {
+export const GEOMETRY: Record<Shape, { top: number; bottom: number }> = {
   vase: { top: 0.08, bottom: 0.9 },
   basket: { top: 0.22, bottom: 0.86 },
   bowl: { top: 0.34, bottom: 0.72 },
 };
 
 /** Radius (fraction of canvas width) at height t, where 0 is the rim and 1 is the base. */
-function radius(shape: Shape, t: number): number {
+export function radius(shape: Shape, t: number): number {
   switch (shape) {
     case "vase": {
       let r = 0.15 + 0.31 * smooth(0, 0.5, t);
@@ -51,7 +51,7 @@ function radius(shape: Shape, t: number): number {
 }
 
 /** 0 = base color, 1 = accent color. `u` is the angle around the piece, `v` the height. */
-function patternMix(pattern: Pattern, u: number, v: number): number {
+export function patternMix(pattern: Pattern, u: number, v: number): number {
   if (pattern === "bands") {
     const band = Math.sin(v * Math.PI * 11) > 0.78 ? 1 : 0;
     let diamond = 0;
