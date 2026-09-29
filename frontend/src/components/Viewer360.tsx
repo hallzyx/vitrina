@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
+import { LuMoveHorizontal } from "react-icons/lu";
 import { useI18n } from "../i18n";
 import { useFrames, type PieceSpec } from "../lib/render";
 
@@ -8,13 +9,17 @@ interface Props {
   piece: PieceSpec;
   className?: string;
   showTabs?: boolean;
+  /** Background of the stage; defaults to a soft studio sweep. */
+  stageClassName?: string;
 }
 
 /**
  * 360° viewer: drag or swipe to spin, with inertia, keyboard support and progressive loading.
  * No third-party libraries. It only needs an ordered list of frames.
  */
-export function Viewer360({ piece, className = "", showTabs = true }: Props) {
+const STUDIO = "bg-[radial-gradient(circle_at_50%_38%,#fff_0%,#f1e6d7_100%)]";
+
+export function Viewer360({ piece, className = "", showTabs = true, stageClassName = STUDIO }: Props) {
   const { t } = useI18n();
   const { frames, ready, total } = useFrames(piece, TOTAL_FRAMES, 480);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -43,10 +48,24 @@ export function Viewer360({ piece, className = "", showTabs = true }: Props) {
     let raf = 0;
     let last = performance.now();
     let shown = -1;
+    // Skip work while the viewer is scrolled out of view.
+    let visible = true;
+    const stage = canvasRef.current;
+    const observer =
+      stage && "IntersectionObserver" in window
+        ? new IntersectionObserver(([entry]) => {
+            visible = entry.isIntersecting;
+          })
+        : null;
+    if (stage) observer?.observe(stage);
     const tick = (now: number) => {
       const m = motion.current;
       const dt = Math.min(50, now - last);
       last = now;
+      if (!visible && !m.dragging) {
+        raf = requestAnimationFrame(tick);
+        return;
+      }
       if (!m.dragging) {
         if (Math.abs(m.vel) > 0.002) {
           m.pos += (m.vel * dt) / 16;
@@ -64,7 +83,10 @@ export function Viewer360({ piece, className = "", showTabs = true }: Props) {
       raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
+    return () => {
+      cancelAnimationFrame(raf);
+      observer?.disconnect();
+    };
   }, [draw, total, reducedMotion]);
 
   const markInteracted = () => {
@@ -103,19 +125,26 @@ export function Viewer360({ piece, className = "", showTabs = true }: Props) {
   };
 
   return (
-    <div className={`viewer ${className}`}>
+    <div className={`p-1.5 ${className}`}>
       {showTabs && (
-        <div className="viewer-tabs" role="tablist">
-          <button role="tab" aria-selected="true" className="viewer-tab is-active" type="button">
+        <div className="mb-2 ml-1 mt-1 inline-flex gap-1 rounded-full bg-paper-2 p-1" role="tablist">
+          <button role="tab" aria-selected="true" className="rounded-full bg-white px-4 py-1 text-[0.82rem] font-bold text-ink shadow-sm" type="button">
             {t("viewer.tab360")}
           </button>
-          <button role="tab" aria-selected="false" className="viewer-tab" type="button" disabled title={t("viewer.3dOff")}>
+          <button
+            role="tab"
+            aria-selected="false"
+            className="cursor-not-allowed rounded-full px-4 py-1 text-[0.82rem] font-bold text-ink-soft opacity-60"
+            type="button"
+            disabled
+            title={t("viewer.3dOff")}
+          >
             {t("viewer.tab3d")}
           </button>
         </div>
       )}
       <div
-        className="viewer-stage"
+        className={`relative aspect-square cursor-grab touch-pan-y select-none overflow-hidden rounded-[1.4rem] active:cursor-grabbing ${stageClassName}`}
         tabIndex={0}
         role="img"
         aria-label={t("viewer.aria")}
@@ -125,23 +154,26 @@ export function Viewer360({ piece, className = "", showTabs = true }: Props) {
         onPointerCancel={onPointerUp}
         onKeyDown={onKeyDown}
       >
-        <canvas ref={canvasRef} width={480} height={480} />
+        <canvas ref={canvasRef} width={480} height={480} className="pointer-events-none block size-full" />
         {!interacted && ready > 0 && (
-          <span className="viewer-hint" aria-hidden="true">
-            ⟷ {t("viewer.drag")}
+          <span
+            className="absolute bottom-3.5 left-1/2 inline-flex -translate-x-1/2 animate-pulse-soft items-center whitespace-nowrap gap-1.5 rounded-full bg-clay-950/80 px-3 py-1 text-[0.8rem] font-medium text-paper backdrop-blur"
+            aria-hidden="true"
+          >
+            <LuMoveHorizontal className="size-3.5" /> {t("viewer.drag")}
           </span>
         )}
         {ready < total && (
-          <span className="viewer-loading">
+          <span className="absolute left-3 top-3 rounded-full bg-white/80 px-2.5 py-0.5 text-xs text-ink-soft">
             {t("viewer.loading")} {ready}/{total}
           </span>
         )}
-        <span className="viewer-angle" aria-hidden="true">
+        <span className="absolute right-3 top-3 rounded-full bg-white/80 px-2.5 py-0.5 text-xs tabular-nums text-ink-soft" aria-hidden="true">
           {angle}°
         </span>
       </div>
-      <div className="viewer-ring" aria-hidden="true">
-        <span style={{ width: `${(angle / 360) * 100}%` }} />
+      <div className="mx-2.5 mb-1 mt-3 h-1 overflow-hidden rounded-full bg-paper-2" aria-hidden="true">
+        <span className="block h-full rounded-full bg-brand" style={{ width: `${(angle / 360) * 100}%` }} />
       </div>
     </div>
   );

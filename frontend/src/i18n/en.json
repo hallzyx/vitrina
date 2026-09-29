@@ -15,7 +15,6 @@
   "viewer.3dOff": "3D is an optional extra and is switched off in this build.",
   "viewer.angle": "Angle",
   "viewer.aria": "Interactive 360° view. Use the left and right arrow keys or drag to rotate.",
-
   "landing.eyebrow": "For makers and small craft businesses",
   "landing.title": "Let buyers spin your craft.",
   "landing.subtitle": "Upload about 12 photos of a handmade piece and get a public store where customers can rotate it in 360° with real photos — and order on WhatsApp.",
@@ -41,7 +40,6 @@
   "landing.ctaBandTitle": "Your piece deserves more than one flat photo.",
   "footer.built": "Built for the AWS Zero to Shipped hackathon.",
   "footer.demoNote": "This build uses demo data; the processing pipeline is coming soon.",
-
   "create.stepOf": "Step {n} of {total}",
   "create.step.capture": "Capture",
   "create.step.brand": "Brand",
@@ -65,7 +63,6 @@
   "capture.notes": "Anything we should know? (materials, size…)",
   "capture.notesPh": "Only what you tell us goes into the listing.",
   "capture.demoNote": "Demo mode: photos stay in your browser and nothing is uploaded yet.",
-
   "brand.title": "Your brand",
   "brand.subtitle": "We picked a palette from your piece. Adjust anything you like; your next products will inherit it.",
   "brand.suggested": "Suggested from your photos",
@@ -78,7 +75,6 @@
   "tone.minimal": "Minimal",
   "tone.rustic": "Rustic",
   "tone.playful": "Playful",
-
   "processing.title": "Preparing your piece",
   "processing.subtitle": "This usually takes under 3 minutes.",
   "processing.validate": "Checking your photos",
@@ -89,7 +85,6 @@
   "processing.listing": "Writing your listing",
   "processing.ready": "Ready to spin",
   "processing.demoNote": "Simulated progress. The real pipeline arrives next.",
-
   "result.title": "Your piece, ready to spin",
   "result.fidelity": "Fidelity score",
   "result.frames": "{n} frames",
@@ -104,7 +99,6 @@
   "result.defaultName": "Blue clay vase",
   "result.defaultDescEn": "A handmade piece by {store}.",
   "result.defaultDescEs": "Una pieza hecha a mano por {store}.",
-
   "publish.title": "Publish your store",
   "publish.whatsapp": "WhatsApp number",
   "publish.whatsappHint": "Include the country code, e.g. +51 999 999 999",
@@ -117,14 +111,12 @@
   "publish.openStore": "Open store",
   "publish.openDashboard": "Go to dashboard",
   "publish.demoNote": "Demo: the link opens the example store.",
-
   "store.by": "Handmade by {name}",
   "store.products": "Products",
   "store.spin": "Spin it",
   "store.notFound": "Store not found",
   "store.backHome": "Back to home",
   "store.powered": "Powered by Vitrina",
-
   "product.order": "Order on WhatsApp",
   "product.orderMsg": "Hi! I'm interested in “{name}” ({price}). Is it available?",
   "product.more": "More from this store",
@@ -132,7 +124,6 @@
   "product.backStore": "Back to store",
   "product.fidelity": "Fidelity {score}",
   "product.frames": "{n} frames",
-
   "dash.title": "My store",
   "dash.session": "Signed in with your secret edit link",
   "dash.views": "Visits",
@@ -147,6 +138,7 @@
   "dash.whatsapp": "WhatsApp",
   "dash.share": "Share your store",
   "dash.demoNote": "Demo data. In the real app these numbers come from your own store.",
-
-  "notfound.title": "Page not found"
+  "notfound.title": "Page not found",
+  "error.title": "Something went wrong loading this page.",
+  "error.reload": "Reload"
 }

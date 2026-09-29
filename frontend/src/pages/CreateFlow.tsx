@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState, type ChangeEvent } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { LuCamera, LuCheck, LuKeyRound, LuPartyPopper } from "react-icons/lu";
 import { CopyButton, RealBadge, Topbar } from "../components/Chrome";
 import { PieceThumb } from "../components/PieceThumb";
+import { btn, card, eyebrow, label } from "../components/ui";
 import { Viewer360 } from "../components/Viewer360";
 import { EXAMPLE_STORE, VASE } from "../data/mock";
 import { useI18n, type TKey } from "../i18n";
@@ -54,18 +56,29 @@ export function CreateFlow() {
   return (
     <>
       <Topbar />
-      <main className="flow">
-        <div className="flow-card">
-          <nav className="stepper" aria-label={t("create.stepOf", { n: index + 1, total: steps.length })}>
+      <main className="grain relative flex justify-center px-4 pb-12 pt-4 sm:pt-8">
+        <div
+          className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-80 bg-[radial-gradient(60%_100%_at_50%_0%,rgb(194_98_63/0.14),transparent)]"
+          aria-hidden="true"
+        />
+        <div className="w-full max-w-[460px] rounded-sheet border border-line bg-card px-5 pb-6 pt-5 shadow-lift sm:px-6">
+          <nav className="mb-2 flex gap-1.5" aria-label={t("create.stepOf", { n: index + 1, total: steps.length })}>
             {steps.map((s, i) => (
-              <span key={s} className={`stepper-dot ${i <= index ? "is-done" : ""} ${i === index ? "is-current" : ""}`} aria-current={i === index ? "step" : undefined}>
+              <span
+                key={s}
+                className={`h-1.5 flex-1 rounded-full transition-colors duration-500 ${
+                  i === index ? "bg-terracotta" : i < index ? "bg-terracotta/45" : "bg-paper-2"
+                }`}
+                aria-current={i === index ? "step" : undefined}
+              >
                 <span className="sr-only">{t(`create.step.${s}` as TKey)}</span>
               </span>
             ))}
           </nav>
-          <p className="muted small center">
+          <p className="mb-4 text-center text-sm text-ink-soft">
             {t("create.stepOf", { n: index + 1, total: steps.length })} · {t(`create.step.${step}` as TKey)}
           </p>
+          <div key={step} className="animate-rise">
 
           {step === "capture" && (
             <Capture
@@ -100,6 +113,7 @@ export function CreateFlow() {
           {step === "publish" && (
             <Publish published={published} onPublish={() => setPublished({ token: randomToken() })} onBack={back} />
           )}
+          </div>
         </div>
       </main>
     </>
@@ -140,75 +154,92 @@ function Capture({ photos, setPhotos, name, setName, price, setPrice, notes, set
 
   return (
     <section>
-      <h1>{t("capture.title")}</h1>
-      <p className="lead-sm">{t("capture.subtitle")}</p>
+      <h1 className="mb-2 text-[1.85rem] font-medium leading-tight tracking-[-0.02em]">{t("capture.title")}</h1>
+      <p className="text-ink-soft">{t("capture.subtitle")}</p>
 
-      <div className="ring" role="img" aria-label={t("capture.count", { n: count, total: TARGET_PHOTOS })}>
-        {Array.from({ length: TARGET_PHOTOS }, (_, i) => (
-          <span key={i} className={`ring-dot ${i < count ? "is-filled" : ""}`} style={{ ["--a" as string]: `${(i / TARGET_PHOTOS) * 360}deg` }} />
-        ))}
-        <div className="ring-center">
-          <PieceThumb piece={VASE} size={160} className="ring-piece" />
-          <strong>{t("capture.count", { n: count, total: TARGET_PHOTOS })}</strong>
+      <div
+        className="relative mx-auto my-5 aspect-square w-full max-w-[300px] [container-type:inline-size]"
+        role="img"
+        aria-label={t("capture.count", { n: count, total: TARGET_PHOTOS })}
+      >
+        <div className="absolute inset-[11%] rounded-full border border-dashed border-sand" aria-hidden="true" />
+        {Array.from({ length: TARGET_PHOTOS }, (_, i) => {
+          const a = (i / TARGET_PHOTOS) * 360;
+          const filled = i < count;
+          return (
+            <span
+              key={i}
+              className={`absolute left-1/2 top-1/2 -m-3 grid size-6 place-items-center rounded-full border-2 transition-all duration-300 ${
+                filled ? "border-terracotta bg-terracotta text-white" : "border-dashed border-[#cbbfae] bg-white"
+              }`}
+              style={{ transform: `rotate(${a}deg) translateY(-40cqw) rotate(${-a}deg)`, transitionDelay: `${i * 25}ms` }}
+            >
+              {filled && <LuCheck aria-hidden="true" className="size-3" strokeWidth={3.5} />}
+            </span>
+          );
+        })}
+        <div className="absolute inset-[22%] flex flex-col items-center justify-center gap-1 text-center text-[0.8rem]">
+          <PieceThumb piece={VASE} size={160} className="w-[70%]" />
+          <strong className="tabular-nums">{t("capture.count", { n: count, total: TARGET_PHOTOS })}</strong>
         </div>
       </div>
 
-      <div className="actions">
-        <label className="btn btn-primary">
-          📷 {t("capture.add")}
+      <div className="mb-4 flex flex-wrap justify-center gap-2">
+        <label className={btn("primary")}>
+          <LuCamera aria-hidden="true" className="size-4" /> {t("capture.add")}
           <input type="file" accept="image/jpeg,image/png,image/webp" multiple capture="environment" hidden onChange={onFiles} />
         </label>
-        <button type="button" className="btn btn-outline" onClick={useDemo}>
+        <button type="button" className={btn("outline")} onClick={useDemo}>
           {t("capture.demo")}
         </button>
         {count > 0 && (
-          <button type="button" className="btn btn-ghost" onClick={() => setPhotos([])}>
+          <button type="button" className={btn("ghost")} onClick={() => setPhotos([])}>
             {t("capture.clear")}
           </button>
         )}
       </div>
 
       {count > 0 && (
-        <ul className="photo-grid">
+        <ul className="mb-4 grid grid-cols-4 gap-1.5">
           {photos.map((src, i) => (
-            <li key={`${i}-${src.slice(-12)}`}>
-              <img src={src} alt="" />
+            <li key={`${i}-${src.slice(-12)}`} className="aspect-square overflow-hidden rounded-xl bg-paper-2">
+              <img src={src} alt="" className="block size-full object-cover" />
             </li>
           ))}
         </ul>
       )}
 
-      <div className="form">
-        <label>
+      <div className="my-4 grid gap-4">
+        <label className={label}>
           {t("capture.name")}
           <input value={name} onChange={(e) => setName(e.target.value)} placeholder={t("capture.namePh")} maxLength={80} />
         </label>
-        <label>
+        <label className={label}>
           {t("capture.price")}
           <input value={price} onChange={(e) => setPrice(e.target.value.replace(/[^0-9.]/g, ""))} inputMode="decimal" placeholder="48" />
         </label>
-        <label>
+        <label className={label}>
           {t("capture.notes")}
           <textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder={t("capture.notesPh")} rows={3} maxLength={400} />
         </label>
       </div>
 
-      <details className="tips" open>
-        <summary>{t("capture.tipsTitle")}</summary>
-        <ul>
+      <details className="my-4 rounded-2xl bg-paper px-4 py-3 text-[0.92rem]" open>
+        <summary className="cursor-pointer font-bold">{t("capture.tipsTitle")}</summary>
+        <ul className="mt-2 list-disc space-y-1 pl-5 text-ink-soft marker:text-terracotta">
           <li>{t("capture.tip1")}</li>
           <li>{t("capture.tip2")}</li>
           <li>{t("capture.tip3")}</li>
         </ul>
       </details>
-      <p className="muted small">{t("capture.demoNote")}</p>
+      <p className="text-sm text-ink-soft">{t("capture.demoNote")}</p>
 
-      {count < MIN_PHOTOS && <p className="hint">{t("capture.min", { min: MIN_PHOTOS })}</p>}
-      <div className="nav-row">
-        <button type="button" className="btn btn-ghost" onClick={onBack}>
+      {count < MIN_PHOTOS && <p className="mt-3 text-sm font-semibold text-[#9a4a26]">{t("capture.min", { min: MIN_PHOTOS })}</p>}
+      <div className="mt-6 flex justify-between gap-2.5">
+        <button type="button" className={btn("ghost")} onClick={onBack}>
           {t("common.back")}
         </button>
-        <button type="button" className="btn btn-primary" disabled={count < MIN_PHOTOS} onClick={onNext}>
+        <button type="button" className={btn("primary", "md", "flex-1")} disabled={count < MIN_PHOTOS} onClick={onNext}>
           {t("common.continue")}
         </button>
       </div>
@@ -233,17 +264,22 @@ function BrandStep({ storeName, setStoreName, tone, setTone, colors, setColors, 
   const { t } = useI18n();
   return (
     <section>
-      <h1>{t("brand.title")}</h1>
-      <p className="lead-sm">{t("brand.subtitle")}</p>
-      <p className="eyebrow">{t("brand.suggested")}</p>
+      <h1 className="mb-2 text-[1.85rem] font-medium leading-tight tracking-[-0.02em]">{t("brand.title")}</h1>
+      <p className="text-ink-soft">{t("brand.subtitle")}</p>
+      <p className={`${eyebrow} mt-5 text-terracotta-deep`}>{t("brand.suggested")}</p>
 
-      <div className="form">
+      <div className="my-4 grid gap-4">
         <div>
-          <span className="label">{t("brand.palette")}</span>
-          <div className="palette">
+          <span className="mb-1.5 block text-sm font-semibold">{t("brand.palette")}</span>
+          <div className="flex gap-2.5">
             {colors.map((c, i) => (
-              <label key={i} className="palette-swatch" style={{ background: c }}>
+              <label
+                key={i}
+                className="relative size-12 cursor-pointer overflow-hidden rounded-full border-[3px] border-white shadow-[0_0_0_1px_var(--color-line),0_6px_14px_-4px_rgb(0_0_0/0.25)] transition-transform hover:scale-110 has-[:focus-visible]:outline-3 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-terracotta-deep"
+                style={{ background: c }}
+              >
                 <input
+                  className="absolute -inset-2 size-[70px] cursor-pointer border-0 p-0 opacity-0"
                   type="color"
                   value={c}
                   aria-label={`${t("brand.palette")} ${i + 1}`}
@@ -253,15 +289,24 @@ function BrandStep({ storeName, setStoreName, tone, setTone, colors, setColors, 
             ))}
           </div>
         </div>
-        <label>
+        <label className={label}>
           {t("brand.name")}
           <input value={storeName} onChange={(e) => setStoreName(e.target.value)} maxLength={60} />
         </label>
         <div>
-          <span className="label">{t("brand.tone")}</span>
-          <div className="chips" role="radiogroup" aria-label={t("brand.tone")}>
+          <span className="mb-1.5 block text-sm font-semibold">{t("brand.tone")}</span>
+          <div className="flex flex-wrap gap-1.5" role="radiogroup" aria-label={t("brand.tone")}>
             {TONES.map((tn) => (
-              <button key={tn} type="button" role="radio" aria-checked={tone === tn} className={`chip-btn ${tone === tn ? "is-active" : ""}`} onClick={() => setTone(tn)}>
+              <button
+                key={tn}
+                type="button"
+                role="radio"
+                aria-checked={tone === tn}
+                className={`cursor-pointer rounded-full border-[1.5px] px-3.5 py-1.5 text-sm font-semibold transition-colors ${
+                  tone === tn ? "border-ink bg-ink text-paper" : "border-line bg-white hover:border-ink/40"
+                }`}
+                onClick={() => setTone(tn)}
+              >
                 {t(`tone.${tn}` as TKey)}
               </button>
             ))}
@@ -269,18 +314,20 @@ function BrandStep({ storeName, setStoreName, tone, setTone, colors, setColors, 
         </div>
       </div>
 
-      <p className="eyebrow">{t("brand.preview")}</p>
-      <div className="brand-preview" style={{ background: colors[1], color: colors[3] }}>
-        <strong style={{ color: colors[0] }}>{storeName || "…"}</strong>
+      <p className={`${eyebrow} text-terracotta-deep`}>{t("brand.preview")}</p>
+      <div className="relative mt-2 flex flex-col gap-0.5 overflow-hidden rounded-2xl p-5" style={{ background: colors[1], color: colors[3] }}>
+        <strong className="font-display text-2xl font-medium" style={{ color: colors[0] }}>
+          {storeName || "…"}
+        </strong>
         <span>{t(`tone.${tone}` as TKey)}</span>
-        <i style={{ background: colors[0] }} />
+        <i className="absolute -right-5 -top-5 size-24 rounded-full opacity-85" style={{ background: colors[0] }} />
       </div>
 
-      <div className="nav-row">
-        <button type="button" className="btn btn-ghost" onClick={onBack}>
+      <div className="mt-6 flex justify-between gap-2.5">
+        <button type="button" className={btn("ghost")} onClick={onBack}>
           {t("common.back")}
         </button>
-        <button type="button" className="btn btn-primary" onClick={onNext}>
+        <button type="button" className={btn("primary", "md", "flex-1")} onClick={onNext}>
           {t("common.continue")}
         </button>
       </div>
@@ -307,25 +354,53 @@ function Processing({ onDone }: { onDone: () => void }) {
 
   return (
     <section>
-      <h1>{t("processing.title")}</h1>
-      <p className="lead-sm">{t("processing.subtitle")}</p>
-      <div className="progress" role="progressbar" aria-valuenow={percent} aria-valuemin={0} aria-valuemax={100}>
-        <span style={{ width: `${percent}%` }} />
+      <h1 className="mb-2 text-[1.85rem] font-medium leading-tight tracking-[-0.02em]">{t("processing.title")}</h1>
+      <p className="text-ink-soft">{t("processing.subtitle")}</p>
+      <div
+        className="my-5 h-2.5 overflow-hidden rounded-full bg-paper-2"
+        role="progressbar"
+        aria-label={t("processing.title")}
+        aria-valuenow={percent}
+        aria-valuemin={0}
+        aria-valuemax={100}
+      >
+        <span
+          className="block h-full rounded-full bg-[linear-gradient(90deg,var(--color-terracotta),var(--color-ochre))] transition-[width] duration-700 ease-out-soft"
+          style={{ width: `${percent}%` }}
+        />
       </div>
-      <ol className="pipeline">
+      <ol className="mb-4 grid gap-2">
         {PIPELINE.map((key, i) => {
           const state = i < done ? "done" : i === done ? "active" : "todo";
           return (
-            <li key={key} className={`pipeline-item is-${state}`}>
-              <span className="pipeline-mark" aria-hidden="true">
-                {state === "done" ? "✓" : state === "active" ? "…" : ""}
+            <li
+              key={key}
+              className={`flex items-center gap-3 rounded-xl px-3.5 py-2.5 transition-all duration-300 ${
+                state === "active" ? "bg-terracotta/10 font-bold text-ink" : state === "done" ? "bg-paper text-ink" : "bg-paper text-ink-soft"
+              }`}
+            >
+              <span
+                className={`grid size-6 shrink-0 place-items-center rounded-full border-2 ${
+                  state === "done"
+                    ? "border-olive bg-olive text-white"
+                    : state === "active"
+                      ? "animate-pulse-soft border-terracotta text-terracotta"
+                      : "border-[#d8cdbd]"
+                }`}
+                aria-hidden="true"
+              >
+                {state === "done" ? (
+                  <LuCheck className="size-3.5" strokeWidth={3.5} />
+                ) : state === "active" ? (
+                  <span className="size-1.5 rounded-full bg-terracotta" />
+                ) : null}
               </span>
               {t(key)}
             </li>
           );
         })}
       </ol>
-      <p className="muted small">{t("processing.demoNote")}</p>
+      <p className="text-sm text-ink-soft">{t("processing.demoNote")}</p>
     </section>
   );
 }
@@ -359,44 +434,44 @@ function Result({ storeName, name, notes, onBack, onNext }: ResultProps) {
 
   return (
     <section>
-      <h1>{t("result.title")}</h1>
-      <div className="card">
+      <h1 className="mb-2 text-[1.85rem] font-medium leading-tight tracking-[-0.02em]">{t("result.title")}</h1>
+      <div className={`${card} mt-3 p-1`}>
         <Viewer360 piece={VASE} />
       </div>
-      <div className="result-meta">
+      <div className="mb-1 mt-3 flex flex-wrap items-center gap-2.5">
         <RealBadge />
-        <span className="muted small">
+        <span className="text-sm text-ink-soft">
           {t("result.fidelity")} 0.93 · {t("result.frames", { n: 24 })}
         </span>
       </div>
-      <p className="muted small">{t("result.demoNote")}</p>
+      <p className="text-sm text-ink-soft">{t("result.demoNote")}</p>
 
-      <h2 className="section-title">{t("result.listing")}</h2>
-      <p className="muted small">{t("result.listingNote")}</p>
-      <div className="form">
-        <label>
+      <h2 className="mb-1 mt-6 text-2xl font-medium">{t("result.listing")}</h2>
+      <p className="text-sm text-ink-soft">{t("result.listingNote")}</p>
+      <div className="my-4 grid gap-4">
+        <label className={label}>
           {t("result.nameEn")}
           <input value={nameEn} onChange={(e) => setNameEn(e.target.value)} maxLength={80} />
         </label>
-        <label>
+        <label className={label}>
           {t("result.descEn")}
           <textarea value={descEn} onChange={(e) => setDescEn(e.target.value)} rows={2} maxLength={400} />
         </label>
-        <label>
+        <label className={label}>
           {t("result.nameEs")}
           <input value={nameEs} onChange={(e) => setNameEs(e.target.value)} maxLength={80} />
         </label>
-        <label>
+        <label className={label}>
           {t("result.descEs")}
           <textarea value={descEs} onChange={(e) => setDescEs(e.target.value)} rows={2} maxLength={400} />
         </label>
       </div>
 
-      <div className="nav-row">
-        <button type="button" className="btn btn-ghost" onClick={onBack}>
+      <div className="mt-6 flex justify-between gap-2.5">
+        <button type="button" className={btn("ghost")} onClick={onBack}>
           {t("common.back")}
         </button>
-        <button type="button" className="btn btn-primary" onClick={onNext}>
+        <button type="button" className={btn("primary", "md", "flex-1")} onClick={onNext}>
           {t("result.publish")}
         </button>
       </div>
@@ -423,30 +498,35 @@ function Publish({ published, onPublish, onBack }: PublishProps) {
     const storeUrl = `${origin}/s/${EXAMPLE_STORE.slug}`;
     return (
       <section>
-        <h1>🎉 {t("publish.done")}</h1>
-        <div className="form">
+        <span className="mb-3 grid size-14 place-items-center rounded-full bg-olive/15 text-olive-deep" aria-hidden="true">
+          <LuPartyPopper className="size-7" />
+        </span>
+        <h1 className="mb-2 text-[1.85rem] font-medium leading-tight tracking-[-0.02em]">{t("publish.done")}</h1>
+        <div className="my-4 grid gap-4">
           <div>
-            <span className="label">{t("publish.storeLink")}</span>
-            <div className="copy-row">
-              <input readOnly value={storeUrl} aria-label={t("publish.storeLink")} />
+            <span className="mb-1.5 block text-sm font-semibold">{t("publish.storeLink")}</span>
+            <div className="flex gap-2">
+              <input readOnly value={storeUrl} aria-label={t("publish.storeLink")} className="min-w-0 flex-1 text-sm" />
               <CopyButton text={storeUrl} />
             </div>
           </div>
-          <div className="callout">
-            <span className="label">🔑 {t("publish.editLinkTitle")}</span>
-            <div className="copy-row">
-              <input readOnly value={editUrl} aria-label={t("publish.editLinkTitle")} />
+          <div className="rounded-2xl border border-terracotta/30 bg-[color-mix(in_oklab,var(--color-terracotta)_9%,white)] p-4">
+            <span className="mb-1.5 flex items-center gap-1.5 text-sm font-semibold">
+              <LuKeyRound aria-hidden="true" className="size-4 text-terracotta-deep" /> {t("publish.editLinkTitle")}
+            </span>
+            <div className="flex gap-2">
+              <input readOnly value={editUrl} aria-label={t("publish.editLinkTitle")} className="min-w-0 flex-1 text-sm" />
               <CopyButton text={editUrl} />
             </div>
-            <p className="small">{t("publish.editLinkWarn")}</p>
+            <p className="mt-2 text-sm">{t("publish.editLinkWarn")}</p>
           </div>
         </div>
-        <p className="muted small">{t("publish.demoNote")}</p>
-        <div className="nav-row">
-          <Link to={`/edit/${published.token}`} className="btn btn-outline">
+        <p className="text-sm text-ink-soft">{t("publish.demoNote")}</p>
+        <div className="mt-6 flex justify-between gap-2.5">
+          <Link to={`/edit/${published.token}`} className={btn("outline", "md", "flex-1")}>
             {t("publish.openDashboard")}
           </Link>
-          <Link to={`/s/${EXAMPLE_STORE.slug}`} className="btn btn-primary">
+          <Link to={`/s/${EXAMPLE_STORE.slug}`} className={btn("primary", "md", "flex-1")}>
             {t("publish.openStore")}
           </Link>
         </div>
@@ -456,14 +536,14 @@ function Publish({ published, onPublish, onBack }: PublishProps) {
 
   return (
     <section>
-      <h1>{t("publish.title")}</h1>
-      <div className="form">
-        <label>
+      <h1 className="mb-2 text-[1.85rem] font-medium leading-tight tracking-[-0.02em]">{t("publish.title")}</h1>
+      <div className="my-4 grid gap-4">
+        <label className={label}>
           {t("publish.whatsapp")}
           <input value={whatsapp} onChange={(e) => setWhatsapp(e.target.value.replace(/[^0-9+ ]/g, ""))} inputMode="tel" placeholder="+51 999 999 999" />
-          <small className="muted">{t("publish.whatsappHint")}</small>
+          <small className="font-normal text-ink-soft">{t("publish.whatsappHint")}</small>
         </label>
-        <label>
+        <label className={label}>
           {t("publish.currency")}
           <select value={currency} onChange={(e) => setCurrency(e.target.value)}>
             <option>USD</option>
@@ -473,11 +553,11 @@ function Publish({ published, onPublish, onBack }: PublishProps) {
           </select>
         </label>
       </div>
-      <div className="nav-row">
-        <button type="button" className="btn btn-ghost" onClick={onBack}>
+      <div className="mt-6 flex justify-between gap-2.5">
+        <button type="button" className={btn("ghost")} onClick={onBack}>
           {t("common.back")}
         </button>
-        <button type="button" className="btn btn-primary" onClick={onPublish}>
+        <button type="button" className={btn("primary", "md", "flex-1")} onClick={onPublish}>
           {t("publish.cta")}
         </button>
       </div>
