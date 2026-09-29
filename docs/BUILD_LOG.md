@@ -37,3 +37,11 @@ Format: `date-time (America/Lima) · what was requested · what the agent did ·
 - **Verification (headless browser, mobile and desktop):** 0 console errors and 0 failed requests; routes `/`, `/create`, `/s/example`, `/s/example/woven-basket`, `/edit/<token>` and the 404 page render on the live URL; full creation flow completes; language toggle persists; WhatsApp link carries the localized message.
 - **Bugs found and fixed during testing:** (1) `useEffect(() => window.scrollTo(...))` returned a non-function and blanked the page on any client-side navigation; (2) the language toggle's `aria-label` did not contain its visible text (WCAG 2.5.3).
 - **Tools:** npm (with `allowScripts` approval for `esbuild` only), headless browser automation, AWS CLI.
+
+## 2026-09-29 · Landing redesign deployed (Tailwind + three.js hero)
+- **Requested:** publish the redesigned frontend (delegated to a subagent; reviewed and verified by the main agent before deploying).
+- **Done (agent):** `git push` of 4 commits (`2e52a2c`..`b969f92`), then `scripts/deploy-frontend.sh` (build, `s3 sync --delete` with immutable caching for hashed assets, `index.html` with `no-cache`, CloudFront invalidation of `/index.html` and `/favicon.svg`).
+- **AWS changes:** objects synced to `vitrina-frontendbucket-zdyg5a5lrtjb` (old hashed assets removed); CloudFront invalidation on `E2QFDRCIB8GU97`. No new resources.
+- **Verification (headless browser on the public URL):** CDN serves the new bundle; `/`, `/?lite`, `/create`, `/s/example`, `/s/example/wooden-bowl`, `/edit/<token>` and the 404 render at 1280 and 390 px with no runtime errors captured (0 console errors, 0 failed requests); Spanish toggle sets `<html lang="es">`; client-side navigation works.
+- **Bundle (gzip):** initial `/` about 132 kB JS; three.js chunk 132 kB, downloaded only on the landing when WebGL is usable.
+- **Tools:** AWS CLI (`s3 sync`, `s3 cp`, `cloudfront create-invalidation`), headless browser automation.
