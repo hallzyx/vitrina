@@ -123,6 +123,7 @@ Everything is infrastructure as code, so it can be switched off and removed clea
 | Action | Command | Effect |
 |---|---|---|
 | **Deploy / update** | `scripts/deploy.sh` | Builds and deploys the `vitrina` stack in `us-east-1`. |
+| **Publish the site** | `scripts/deploy-frontend.sh` | Builds the SPA, syncs it to S3 and invalidates CloudFront. |
 | **Pause** | `scripts/pause.sh` | Sets `Paused=true`: CloudFront is disabled and the API throttles to zero. Data is kept. |
 | **Resume** | `scripts/pause.sh resume` | Sets `Paused=false` and brings the site back. |
 | **Destroy** | `scripts/destroy.sh` | Empties the buckets and deletes the stack. **Irreversible.** |
@@ -138,7 +139,8 @@ Built for the AWS **Zero to Shipped** hackathon (Sep 18 – Oct 2, 2026).
 - [x] SAM skeleton: S3 + CloudFront + `GET /health`
 - [x] Skeleton deployed with a public URL → https://dz81nhpgrhb93.cloudfront.net
 - [ ] 360° pipeline end to end (Step Functions + Bedrock)
-- [ ] Storefront, viewer, dashboard, example store (`/s/example`)
+- [x] Frontend screens with demo data: landing, guided capture, brand, processing, 360° viewer, publish, store, buyer view, dashboard (EN/ES)
+- [ ] Real data: example store from the API (`/s/example`) and real 360° frames
 - [ ] Optional 3D branch (`ENABLE_3D`)
 
 See [`PLAN.md`](PLAN.md) for the day-by-day schedule and [`SPEC.md`](SPEC.md) for the full specification.

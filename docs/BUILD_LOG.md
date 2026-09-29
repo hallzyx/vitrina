@@ -29,3 +29,11 @@ Format: `date-time (America/Lima) · what was requested · what the agent did ·
 - **Verification:** `GET /prod/health` → 200 `{"status": "ok", "service": "vitrina"}`; site `/` → 200 with `<title>Vitrina</title>`; `/s/example` → 200 (SPA fallback).
 - **Not yet tested:** `scripts/pause.sh` and `scripts/destroy.sh` (only written).
 - **Tools:** AWS SAM CLI 1.166.2, AWS CLI (`s3 cp`, `cloudfront create-invalidation`), curl.
+
+## 2026-09-29 · Frontend demo deployed (all screens, EN/ES)
+- **Requested:** recreate every screen from the `.md` specs without screenshots.
+- **Done (agent):** Vite + React + TypeScript SPA in `frontend/` with the routes from `SPEC.md` (landing, guided capture → brand → processing → viewer → publish, store, buyer view, dashboard), real EN/ES i18n (browser-language default, persisted toggle), and an interactive 360° viewer fed by procedurally rendered demo pieces (no real photos exist yet). Added `scripts/deploy-frontend.sh` (build, `s3 sync` with immutable caching for hashed assets and `no-cache` for `index.html`, CloudFront invalidation).
+- **AWS changes:** objects uploaded to `vitrina-frontendbucket-zdyg5a5lrtjb`; CloudFront invalidations on `E2QFDRCIB8GU97`. No new resources.
+- **Verification (headless browser, mobile and desktop):** 0 console errors and 0 failed requests; routes `/`, `/create`, `/s/example`, `/s/example/woven-basket`, `/edit/<token>` and the 404 page render on the live URL; full creation flow completes; language toggle persists; WhatsApp link carries the localized message.
+- **Bugs found and fixed during testing:** (1) `useEffect(() => window.scrollTo(...))` returned a non-function and blanked the page on any client-side navigation; (2) the language toggle's `aria-label` did not contain its visible text (WCAG 2.5.3).
+- **Tools:** npm (with `allowScripts` approval for `esbuild` only), headless browser automation, AWS CLI.
