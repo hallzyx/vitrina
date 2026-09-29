@@ -81,6 +81,27 @@ The UI ships in **English and Spanish**.
 - A visible toggle lets users switch; the choice is remembered.
 - Generated product copy is produced in both languages.
 
+## 🎨 Frontend
+
+`frontend/` is a Vite + React 18 + TypeScript (strict) SPA with `react-router-dom`.
+
+| Concern | Choice |
+|---|---|
+| Styling | **Tailwind CSS v4** (`@tailwindcss/vite`). All design tokens (colors, fonts, radii, shadows, motion) live in the `@theme` block of `src/styles.css`; shared recipes (buttons, cards) in `src/components/ui.ts`. |
+| Type | Fraunces (display) + Instrument Sans (text), self-hosted via Fontsource. No third-party font requests. |
+| Landing hero | **three.js**: a lathe-turned piece on a turntable, drawn in real time with the same surface patterns as the demo pieces. Loaded lazily in its own chunk. |
+| Motion | **motion** (`motion/react`) for scroll-linked storytelling and reveals, landing only. Respects `prefers-reduced-motion`. |
+| Icons | **react-icons** (Lucide set, `react-icons/lu`), imported per icon. |
+
+The 3D hero is an illustration, not a product view: stores always show the artisan's real photos in the frame-based 360° viewer (`src/components/Viewer360.tsx`). The hero never renders blank: weak devices, `saveData`, missing WebGL or any runtime error fall back to that same 360° viewer (append `?lite` to the URL to force the fallback, `?3d` to force WebGL).
+
+```bash
+cd frontend
+npm ci
+npm run dev       # local development
+npm run build     # type-check + production build (dist/)
+```
+
 ## 🗂️ Repository layout
 
 ```
