@@ -1,5 +1,6 @@
 import { useI18n, type TKey } from "../i18n";
 import { CURRENCIES, TONES, type Tone } from "../lib/api";
+import { readableAccent } from "../lib/product";
 import { label } from "./ui";
 
 export interface BrandDraft {
@@ -93,8 +94,8 @@ export function BrandEditor({
       </div>
       <div>
         <span className="mb-1.5 block text-sm font-semibold">{t("brand.preview")}</span>
-        <div className="relative flex flex-col gap-0.5 overflow-hidden rounded-2xl p-5" style={{ background: colors[1], color: colors[3] }}>
-          <strong className="relative z-10 break-words pr-16 font-display text-2xl font-medium" style={{ color: colors[0] }}>
+        <div className="relative flex flex-col gap-0.5 overflow-hidden rounded-2xl border border-line p-5 text-ink" style={{ background: colors[1] }}>
+          <strong className="relative z-10 break-words pr-16 font-display text-2xl font-medium" style={{ color: readableAccent(colors) }}>
             {name || "…"}
           </strong>
           <span className="relative z-10">{t(`tone.${tone}` as TKey)}</span>

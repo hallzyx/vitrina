@@ -12,9 +12,35 @@ export function paletteOf(brand: Brand | undefined): string[] {
   return DEFAULT_COLORS.map((fallback, i) => colors[i] ?? fallback);
 }
 
+function luminance(hex: string): number {
+  const channel = (i: number) => {
+    const v = parseInt(hex.slice(i, i + 2), 16) / 255;
+    return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
+  };
+  return 0.2126 * channel(1) + 0.7152 * channel(3) + 0.0722 * channel(5);
+}
+
+/** Contrast ratio against white (buttons use white text; text sits on near-white paper). */
+function contrastOnWhite(hex: string): number {
+  return 1.05 / (luminance(hex) + 0.05);
+}
+
+/**
+ * The accent the UI can actually use: the first palette color with enough contrast for white text,
+ * else the darkest palette color, else the house color. Palettes extracted from pale pieces
+ * (white porcelain, light wood) would otherwise make brand text and buttons unreadable.
+ */
+export function readableAccent(colors: string[]): string {
+  const valid = colors.filter((c) => HEX.test(c));
+  const good = valid.find((c) => contrastOnWhite(c) >= 3);
+  if (good) return good;
+  const darkest = [...valid].sort((a, b) => luminance(a) - luminance(b))[0];
+  return darkest && contrastOnWhite(darkest) >= 3 ? darkest : DEFAULT_COLORS[0];
+}
+
 export function brandStyle(brand: Brand | undefined): CSSProperties {
-  const [brandColor, soft] = paletteOf(brand);
-  return { "--brand": brandColor, "--brand-soft": soft } as CSSProperties;
+  const palette = paletteOf(brand);
+  return { "--brand": readableAccent(palette), "--brand-soft": palette[1] } as CSSProperties;
 }
 
 /** Name and description in the active language, falling back to the other one, then to the plain name. */
