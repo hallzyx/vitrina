@@ -156,7 +156,7 @@ function ScrollStory() {
                 {...inert(step !== 2)}
               >
                 <div className="absolute inset-[13%]">
-                  <Viewer360 piece={VASE} showTabs={false} stageClassName="bg-transparent" />
+                  <Viewer360 piece={VASE} stageClassName="bg-transparent" />
                 </div>
               </motion.div>
             </div>
@@ -242,7 +242,7 @@ function StaticStory() {
           →
         </span>
         <div className="mx-auto w-full max-w-sm rounded-sheet bg-card p-3 shadow-lift">
-          <Viewer360 piece={VASE} showTabs={false} stageClassName="bg-transparent" />
+          <Viewer360 piece={VASE} stageClassName="bg-transparent" />
         </div>
       </div>
       <ol className="mt-12 grid gap-4 md:grid-cols-3">

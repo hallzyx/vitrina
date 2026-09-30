@@ -94,3 +94,8 @@ Format: `date-time (America/Lima) · what was requested · what the agent did ·
 - **Done (agent):** `process_photo` embeds only every `FIDELITY_SAMPLE_EVERY`-th frame (default 2), halving Titan calls per product (24 to 12). Unscored frames are kept and reported through `fidelityChecked`, as already done for throttled frames. Tests: 92 passing (new sampling test; the throttling test pins the sample step to 1). Change set reviewed (only `PipelineFunction` and `PipelineStateMachine` modified), `UPDATE_COMPLETE`.
 - **Trade-off:** a damaged cutout on an unsampled frame is not caught by the score. The mask is a pure cut of the real photo, so the pixels stay faithful either way.
 - **Tools:** AWS SAM CLI, AWS CLI (`cloudformation`), pytest + moto.
+
+## 2026-09-30 · Remove the disabled 3D tab, add architecture doc
+- **Requested by the owner:** the viewer showed a locked "3D" tab; 3D was dropped earlier (see DECISIONS), so the placeholder only looked broken.
+- **Done (agent):** removed the disabled tab and its i18n keys from the viewer; wrote `docs/ARCHITECTURE.md` (Mermaid diagram, request paths, guardrails). Frontend rebuilt and published to the frontend bucket, CloudFront invalidated for `/` and `/index.html`.
+- **Tools:** npm/Vite, AWS CLI (`s3`, `cloudfront`, `cloudformation`).

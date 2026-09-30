@@ -16,7 +16,6 @@ type Source = CanvasImageSource | null;
 
 interface CommonProps {
   className?: string;
-  showTabs?: boolean;
   /** Background of the stage; defaults to a soft studio sweep. Real frames are transparent and sit on it. */
   stageClassName?: string;
   /** Name of the piece, used in the accessible label. */
@@ -115,7 +114,7 @@ interface StageProps extends CommonProps {
   resolution: number;
 }
 
-function SpinStage({ sources, ready, failed, total, resolution, className = "", showTabs = true, stageClassName = STUDIO, label }: StageProps) {
+function SpinStage({ sources, ready, failed, total, resolution, className = "", stageClassName = STUDIO, label }: StageProps) {
   const { t } = useI18n();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const sourcesRef = useRef(sources);
@@ -240,23 +239,6 @@ function SpinStage({ sources, ready, failed, total, resolution, className = "", 
 
   return (
     <div className={`p-1.5 ${className}`}>
-      {showTabs && (
-        <div className="mb-2 ml-1 mt-1 inline-flex gap-1 rounded-full bg-paper-2 p-1" role="tablist">
-          <button role="tab" aria-selected="true" className="rounded-full bg-white px-4 py-1 text-[0.82rem] font-bold text-ink shadow-sm" type="button">
-            {t("viewer.tab360")}
-          </button>
-          <button
-            role="tab"
-            aria-selected="false"
-            className="cursor-not-allowed rounded-full px-4 py-1 text-[0.82rem] font-bold text-ink-soft opacity-60"
-            type="button"
-            disabled
-            title={t("viewer.3dOff")}
-          >
-            {t("viewer.tab3d")}
-          </button>
-        </div>
-      )}
       <div
         className={`relative aspect-square cursor-grab touch-pan-y select-none overflow-hidden rounded-[1.4rem] active:cursor-grabbing ${stageClassName}`}
         tabIndex={0}

@@ -96,7 +96,6 @@ export function Hero() {
       <Viewer360
         key={shape}
         piece={PIECES[shape]}
-        showTabs={false}
         stageClassName="bg-[radial-gradient(circle_at_50%_45%,rgb(255_236_214/0.16),transparent_68%)]"
       />
     </div>
