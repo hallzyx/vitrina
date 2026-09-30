@@ -19,7 +19,7 @@
     "ProcessPhotos": {
       "Type": "Map",
       "ItemsPath": "$.validate.photos",
-      "MaxConcurrency": 4,
+      "MaxConcurrency": 3,
       "ItemSelector": {
         "task": "process_photo",
         "storeId.$": "$.storeId",
@@ -37,7 +37,7 @@
             "OutputPath": "$.Payload",
             "TimeoutSeconds": 290,
             "Retry": [
-              { "ErrorEquals": ["Lambda.ServiceException", "Lambda.AWSLambdaException", "Lambda.SdkClientException", "Lambda.TooManyRequestsException", "ClientError", "EndpointConnectionError", "ReadTimeoutError"], "IntervalSeconds": 3, "MaxAttempts": 4, "BackoffRate": 2 }
+              { "ErrorEquals": ["Lambda.ServiceException", "Lambda.AWSLambdaException", "Lambda.SdkClientException", "Lambda.TooManyRequestsException", "ClientError", "ThrottlingException", "TooManyRequestsException", "ServiceUnavailableException", "ModelTimeoutException", "EndpointConnectionError", "ReadTimeoutError"], "IntervalSeconds": 3, "MaxAttempts": 4, "BackoffRate": 2 }
             ],
             "End": true
           }
@@ -57,7 +57,7 @@
       "ResultSelector": { "frames.$": "$.Payload.frames", "mode.$": "$.Payload.mode" },
       "ResultPath": "$.align",
       "TimeoutSeconds": 290,
-      "Retry": [{ "ErrorEquals": ["Lambda.ServiceException", "Lambda.AWSLambdaException", "Lambda.SdkClientException", "Lambda.TooManyRequestsException", "ClientError"], "IntervalSeconds": 3, "MaxAttempts": 3, "BackoffRate": 2 }],
+      "Retry": [{ "ErrorEquals": ["Lambda.ServiceException", "Lambda.AWSLambdaException", "Lambda.SdkClientException", "Lambda.TooManyRequestsException", "ClientError", "ThrottlingException", "TooManyRequestsException", "ServiceUnavailableException", "ModelTimeoutException"], "IntervalSeconds": 3, "MaxAttempts": 3, "BackoffRate": 2 }],
       "Catch": [{ "ErrorEquals": ["States.ALL"], "ResultPath": "$.error", "Next": "MarkFailed" }],
       "Next": "Fidelity"
     },
@@ -68,10 +68,10 @@
         "FunctionName": "${PipelineFunctionArn}",
         "Payload": { "task": "fidelity", "storeId.$": "$.storeId", "productId.$": "$.productId", "frames.$": "$.align.frames" }
       },
-      "ResultSelector": { "kept.$": "$.Payload.kept", "dropped.$": "$.Payload.dropped", "score.$": "$.Payload.score" },
+      "ResultSelector": { "kept.$": "$.Payload.kept", "dropped.$": "$.Payload.dropped", "score.$": "$.Payload.score", "checked.$": "$.Payload.checked" },
       "ResultPath": "$.fidelity",
       "TimeoutSeconds": 120,
-      "Retry": [{ "ErrorEquals": ["Lambda.ServiceException", "Lambda.AWSLambdaException", "Lambda.SdkClientException", "Lambda.TooManyRequestsException", "ClientError"], "IntervalSeconds": 2, "MaxAttempts": 3, "BackoffRate": 2 }],
+      "Retry": [{ "ErrorEquals": ["Lambda.ServiceException", "Lambda.AWSLambdaException", "Lambda.SdkClientException", "Lambda.TooManyRequestsException", "ClientError", "ThrottlingException", "TooManyRequestsException", "ServiceUnavailableException", "ModelTimeoutException"], "IntervalSeconds": 2, "MaxAttempts": 3, "BackoffRate": 2 }],
       "Catch": [{ "ErrorEquals": ["States.ALL"], "ResultPath": "$.error", "Next": "MarkFailed" }],
       "Next": "Brand"
     },
@@ -84,7 +84,7 @@
       },
       "ResultPath": null,
       "TimeoutSeconds": 120,
-      "Retry": [{ "ErrorEquals": ["Lambda.ServiceException", "Lambda.AWSLambdaException", "Lambda.SdkClientException", "Lambda.TooManyRequestsException", "ClientError"], "IntervalSeconds": 3, "MaxAttempts": 3, "BackoffRate": 2 }],
+      "Retry": [{ "ErrorEquals": ["Lambda.ServiceException", "Lambda.AWSLambdaException", "Lambda.SdkClientException", "Lambda.TooManyRequestsException", "ClientError", "ThrottlingException", "TooManyRequestsException", "ServiceUnavailableException", "ModelTimeoutException"], "IntervalSeconds": 3, "MaxAttempts": 3, "BackoffRate": 2 }],
       "Catch": [{ "ErrorEquals": ["States.ALL"], "ResultPath": "$.error", "Next": "MarkFailed" }],
       "Next": "Listing"
     },
@@ -98,7 +98,7 @@
       "ResultSelector": { "copy.$": "$.Payload.copy", "fallback.$": "$.Payload.fallback" },
       "ResultPath": "$.listing",
       "TimeoutSeconds": 180,
-      "Retry": [{ "ErrorEquals": ["Lambda.ServiceException", "Lambda.AWSLambdaException", "Lambda.SdkClientException", "Lambda.TooManyRequestsException", "ClientError"], "IntervalSeconds": 3, "MaxAttempts": 3, "BackoffRate": 2 }],
+      "Retry": [{ "ErrorEquals": ["Lambda.ServiceException", "Lambda.AWSLambdaException", "Lambda.SdkClientException", "Lambda.TooManyRequestsException", "ClientError", "ThrottlingException", "TooManyRequestsException", "ServiceUnavailableException", "ModelTimeoutException"], "IntervalSeconds": 3, "MaxAttempts": 3, "BackoffRate": 2 }],
       "Catch": [{ "ErrorEquals": ["States.ALL"], "ResultPath": "$.error", "Next": "MarkFailed" }],
       "Next": "Finalize"
     },
@@ -113,12 +113,13 @@
           "productId.$": "$.productId",
           "frames.$": "$.fidelity.kept",
           "score.$": "$.fidelity.score",
+          "checked.$": "$.fidelity.checked",
           "copy.$": "$.listing.copy"
         }
       },
       "ResultPath": null,
       "TimeoutSeconds": 120,
-      "Retry": [{ "ErrorEquals": ["Lambda.ServiceException", "Lambda.AWSLambdaException", "Lambda.SdkClientException", "Lambda.TooManyRequestsException", "ClientError"], "IntervalSeconds": 2, "MaxAttempts": 3, "BackoffRate": 2 }],
+      "Retry": [{ "ErrorEquals": ["Lambda.ServiceException", "Lambda.AWSLambdaException", "Lambda.SdkClientException", "Lambda.TooManyRequestsException", "ClientError", "ThrottlingException", "TooManyRequestsException", "ServiceUnavailableException", "ModelTimeoutException"], "IntervalSeconds": 2, "MaxAttempts": 3, "BackoffRate": 2 }],
       "Catch": [{ "ErrorEquals": ["States.ALL"], "ResultPath": "$.error", "Next": "MarkFailed" }],
       "End": true
     },
