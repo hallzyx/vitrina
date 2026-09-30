@@ -95,11 +95,14 @@ The UI ships in **English and Spanish**.
 
 The 3D hero is an illustration, not a product view: stores always show the artisan's real photos in the frame-based 360° viewer (`src/components/Viewer360.tsx`). The hero never renders blank: weak devices, `saveData`, missing WebGL or any runtime error fall back to that same 360° viewer (append `?lite` to the URL to force the fallback, `?3d` to force WebGL).
 
+All data comes from the API (`src/lib/api.ts`, typed): public stores and the example store, the creator endpoints (edit token in `X-Edit-Token`, invite phrase in `X-Access-Code`) and direct photo uploads to S3 with presigned POST forms. `/create` offers two paths: **sample photos** (no invite phrase; a live run, or a clearly labeled replay of a recorded run when today's live runs are used up) and **your own photos** (invite phrase). Demo products are always labeled as renders of 3D-scanned models; the "real photos" badge is reserved for products made from a user's own photos.
+
 ```bash
 cd frontend
 npm ci
-npm run dev       # local development
+npm run dev       # local development (proxies /api, /media and /samples to the deployed site)
 npm run build     # type-check + production build (dist/)
+npx vite preview --port 4173   # serve the production build, same proxy
 ```
 
 ### Backend
@@ -172,10 +175,10 @@ Built for the AWS **Zero to Shipped** hackathon (Sep 18 – Oct 2, 2026).
 - [x] Skeleton deployed with a public URL → https://dz81nhpgrhb93.cloudfront.net
 - [x] Backend base: DynamoDB, S3, invite-phrase gate, store/product creation with presigned uploads, public endpoints, daily limits
 - [x] 360° pipeline end to end (Step Functions, in-function segmentation, Titan, Nova): 12 photos to a spinnable product in about 40 s, verified on the public URL
-- [ ] Frontend wired to the real pipeline (upload, live progress, real frames in the viewer)
-- [ ] Sample gallery (renders of CC0 scans) and the pre-processed example store
-- [x] Frontend screens with demo data: landing, guided capture, brand, processing, 360° viewer, publish, store, buyer view, dashboard (EN/ES)
-- [ ] Real data: example store from the API (`/s/example`) and real 360° frames
+- [x] Frontend wired to the real pipeline (upload, live progress, real frames in the viewer)
+- [x] Sample gallery (renders of CC0 scans) with live runs and recorded replays, and the pre-processed example store
+- [x] Frontend screens: landing, create flow (samples or own photos), processing, 360° viewer, publish, store, buyer view, dashboard (EN/ES)
+- [x] Real data: example store from the API (`/s/example`) and real 360° frames
 - [ ] Optional 3D branch (`ENABLE_3D`)
 
 See [`PLAN.md`](PLAN.md) for the day-by-day schedule and [`SPEC.md`](SPEC.md) for the full specification.
