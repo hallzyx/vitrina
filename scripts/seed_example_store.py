@@ -68,13 +68,18 @@ def clear_my_sample_counters(limits) -> None:
 def step_timings(sfn, account: str, product_id: str) -> dict:
     arn = f"arn:aws:states:{REGION}:{account}:execution:vitrina-pipeline:{product_id}-1"
     events = sfn.get_execution_history(executionArn=arn, maxResults=1000)["events"]
-    starts = [(e["stateEnteredEventDetails"]["name"], e["timestamp"]) for e in events if e["type"] == "TaskStateEntered" or e["type"] == "MapStateEntered"]
+    # Only the top-level states count. The Map state runs many inner "ProcessPhoto" tasks, which would
+    # otherwise cut the background-removal step short (its duration runs until the NEXT top-level state).
+    starts = [
+        (e["stateEnteredEventDetails"]["name"], e["timestamp"])
+        for e in events
+        if e["type"] in ("TaskStateEntered", "MapStateEntered") and e["stateEnteredEventDetails"]["name"] in STATE_TO_STEP
+    ]
     end = max(e["timestamp"] for e in events if e["type"] in ("ExecutionSucceeded", "ExecutionFailed"))
     steps = []
     for i, (name, at) in enumerate(starts):
         nxt = starts[i + 1][1] if i + 1 < len(starts) else end
-        if name in STATE_TO_STEP:
-            steps.append({"step": STATE_TO_STEP[name], "ms": int((nxt - at).total_seconds() * 1000)})
+        steps.append({"step": STATE_TO_STEP[name], "ms": int((nxt - at).total_seconds() * 1000)})
     return {"totalMs": int((end - starts[0][1]).total_seconds() * 1000), "steps": steps}
 
 
