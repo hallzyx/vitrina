@@ -99,6 +99,7 @@ def status(event: dict) -> dict:
                 "thumbs": [_url(k) for k in product.get("thumbKeys", [])],
                 "copy": product.get("copy", {}),
                 "fidelityScore": product.get("fidelityScore"),
+                "fidelityChecked": product.get("fidelityChecked"),
                 "brand": store.get("brand", {}),
             }
         )

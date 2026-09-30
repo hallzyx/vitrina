@@ -87,7 +87,7 @@ def run_pipeline():
     checked = tasks.fidelity({**base, "frames": aligned["frames"]})
     tasks.brand({**base, "frames": checked["kept"]})
     written = tasks.listing({**base, "frames": checked["kept"]})
-    tasks.finalize({**base, "frames": checked["kept"], "score": checked["score"], "copy": written["copy"]})
+    tasks.finalize({**base, "frames": checked["kept"], "score": checked["score"], "checked": checked["checked"], "copy": written["copy"]})
     return validated, aligned, checked, written
 
 
@@ -140,6 +140,37 @@ def test_piece_pixels_are_not_altered_by_the_pipeline(stubs):
     # The piece's color in the frame matches the color it had in the photo.
     assert np.abs(frame[..., :3][solid].mean(axis=0) - np.array([196, 108, 76])).max() < 4
     assert solid.sum() > 10000 and original.shape[0] == 900
+
+
+def test_a_throttled_embedding_keeps_the_frame_but_reports_it_as_unchecked(stubs, monkeypatch):
+    """Low Bedrock quotas must not fail a product: the frame stays, unscored, and the product says how many were checked."""
+    real = ai.titan_embed
+    calls = {"n": 0}
+
+    def flaky(jpeg):
+        calls["n"] += 1
+        if calls["n"] in (5, 6):  # the 1st embedding of the 3rd and of the 4th photo fails, so those two go unscored
+            raise ai.EmbeddingUnavailable("ThrottlingException")
+        return real(jpeg)
+
+    monkeypatch.setattr(ai, "titan_embed", flaky)
+    seed(10)
+    _, aligned, checked, _ = run_pipeline()
+    item = product()
+    assert item["status"] == "ready_360" and len(item["frameKeys"]) == 10
+    assert checked["checked"] == 8 and item["fidelityChecked"] == 8
+    assert 0.8 <= float(item["fidelityScore"]) <= 1  # the score covers only the checked frames
+
+
+def test_with_nothing_scored_the_product_is_ready_without_a_score(stubs, monkeypatch):
+    def always_throttled(jpeg):
+        raise ai.EmbeddingUnavailable("ThrottlingException")
+
+    monkeypatch.setattr(ai, "titan_embed", always_throttled)
+    seed(8)
+    run_pipeline()
+    item = product()
+    assert item["status"] == "ready_360" and item["fidelityChecked"] == 0 and "fidelityScore" not in item
 
 
 def test_brand_is_only_set_for_the_first_product(stubs):

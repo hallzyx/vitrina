@@ -127,11 +127,15 @@ def process_photo(event: dict) -> dict:
         rgba.save(buf, "PNG", compress_level=3)
         put_s3(processed_bucket(), cut_key(store_id, product_id, index), buf.getvalue(), "image/png")
 
-        # Fidelity: does the cutout still look like the same piece as the photo it came from?
+        # Fidelity: does the cutout still look like the same piece as the photo it came from? If the
+        # embedding model stays throttled the frame is kept but NOT scored, and the product says so.
         crop = imaging.expand_box(box, image.size)
-        original = ai.titan_embed(imaging.to_jpeg(image.crop(crop), 512))
-        processed = ai.titan_embed(imaging.to_jpeg(imaging.on_gray(rgba.crop(crop)), 512))
-        score = imaging.cosine(original, processed)
+        try:
+            original = ai.titan_embed(imaging.to_jpeg(image.crop(crop), 512))
+            processed = ai.titan_embed(imaging.to_jpeg(imaging.on_gray(rgba.crop(crop)), 512))
+            score = round(imaging.cosine(original, processed), 4)
+        except ai.EmbeddingUnavailable:
+            score = None
     except PipelineError as err:
         return {"index": index, "ok": False, "reason": err.code}
     bump_photos_done(store_id, product_id)
@@ -141,7 +145,7 @@ def process_photo(event: dict) -> dict:
         "box": list(box),
         "width": image.width,
         "height": image.height,
-        "fidelity": round(score, 4),
+        "fidelity": score,
     }
 
 
@@ -197,10 +201,14 @@ def fidelity(event: dict) -> dict:
     # masks: a correct cutout scores 0.96-0.99, scattered holes 0.82-0.88, a lost quarter ~0.92-0.97).
     floor = env_float("FIDELITY_THRESHOLD", 0.80)
     frames = event["frames"]
-    median = statistics.median(f["fidelity"] for f in frames)
-    threshold = round(max(floor, median - env_float("FIDELITY_MAX_DROP", 0.05)), 4)
-    kept = [f for f in frames if f["fidelity"] >= threshold]
-    dropped = [f for f in frames if f["fidelity"] < threshold]
+    scored = [f for f in frames if f.get("fidelity") is not None]
+    # Frames the embedding model could not score (throttling) are kept and reported as unchecked.
+    threshold = None
+    if scored:
+        median = statistics.median(f["fidelity"] for f in scored)
+        threshold = round(max(floor, median - env_float("FIDELITY_MAX_DROP", 0.05)), 4)
+    kept = [f for f in frames if f.get("fidelity") is None or f["fidelity"] >= threshold]
+    dropped = [f for f in frames if f.get("fidelity") is not None and f["fidelity"] < threshold]
     minimum = env_int("MIN_PHOTOS", 6)
     if len(kept) < minimum:
         raise PipelineError(
@@ -212,10 +220,12 @@ def fidelity(event: dict) -> dict:
             Bucket=processed_bucket(),
             Delete={"Objects": [{"Key": frame["frameKey"]}, {"Key": frame["thumbKey"]}]},
         )
+    kept_scores = [f["fidelity"] for f in kept if f.get("fidelity") is not None]
     return {
         "kept": kept,
         "dropped": [f["index"] for f in dropped],
-        "score": round(statistics.mean(f["fidelity"] for f in kept), 4),
+        "score": round(statistics.mean(kept_scores), 4) if kept_scores else None,
+        "checked": len(kept_scores),
         "threshold": threshold,
     }
 
@@ -302,22 +312,31 @@ def listing(event: dict) -> dict:
 def finalize(event: dict) -> dict:
     store_id, product_id = _ids(event)
     frames = sorted(event["frames"], key=lambda f: f["index"])
+    score = event.get("score")
+    # `fidelityChecked` says how many frames were actually scored, so a partial check is never passed off
+    # as a full one. With no score at all, the score attribute is removed.
+    expression = (
+        "SET #s = :ready, #step = :step, frameKeys = :frames, thumbKeys = :thumbs, #copy = :copy, "
+        "fidelityChecked = :checked, completedAt = :now"
+        + (", fidelityScore = :score" if score is not None else "")
+        + " REMOVE #err" + ("" if score is not None else ", fidelityScore")
+    )
+    values = {
+        ":ready": "ready_360",
+        ":step": "ready",
+        ":frames": [f["frameKey"] for f in frames],
+        ":thumbs": [f["thumbKey"] for f in frames],
+        ":copy": event["copy"],
+        ":checked": int(event.get("checked", len(frames))),
+        ":now": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+    }
+    if score is not None:
+        values[":score"] = Decimal(str(score))
     table("TABLE_PRODUCTS").update_item(
         Key=product_key(store_id, product_id),
-        UpdateExpression=(
-            "SET #s = :ready, #step = :step, frameKeys = :frames, thumbKeys = :thumbs, #copy = :copy, "
-            "fidelityScore = :score, completedAt = :now REMOVE #err"
-        ),
+        UpdateExpression=expression,
         ExpressionAttributeNames={"#s": "status", "#step": "step", "#copy": "copy", "#err": "error"},
-        ExpressionAttributeValues={
-            ":ready": "ready_360",
-            ":step": "ready",
-            ":frames": [f["frameKey"] for f in frames],
-            ":thumbs": [f["thumbKey"] for f in frames],
-            ":copy": event["copy"],
-            ":score": Decimal(str(event["score"])),
-            ":now": datetime.now(timezone.utc).isoformat(timespec="seconds"),
-        },
+        ExpressionAttributeValues=values,
     )
     # The intermediate cutouts are private scratch files; remove them once the frames exist.
     listed = s3().list_objects_v2(Bucket=processed_bucket(), Prefix=f"work/{store_id}/{product_id}/")

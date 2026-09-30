@@ -1,21 +1,17 @@
 """POST /api/stores (invite phrase required) and POST /api/stores/{storeId}/publish (edit token)."""
-from datetime import datetime, timezone
+from boto3.dynamodb.conditions import Key
 
 from common import limits
 from common.access import require_code
 from common.aws import table
 from common.config import env_int
 from common.http import ApiError, api, header, json_body, response
-from common.ids import ulid
-from common.security import day_stamp, hash_token, ip_hash, new_edit_token
-from common.stores import find_by_slug, require_store
-from common.validation import clean_brand, clean_currency, clean_text, clean_whatsapp, slugify
+from common.security import day_stamp, ip_hash
+from common.stores import create_store_record, now_iso, require_store
+from common.validation import clean_brand, clean_currency, clean_text, clean_whatsapp
 
 DAY = 86400
-
-
-def _now() -> str:
-    return datetime.now(timezone.utc).isoformat(timespec="seconds")
+READY = {"ready_360", "ready_3d"}
 
 
 def create_store(event: dict) -> dict:
@@ -24,42 +20,31 @@ def create_store(event: dict) -> dict:
     # Validate first so a typo never burns the visitor's daily quota.
     body = json_body(event)
     name = clean_text(body.get("name"), "name", 60)
-    item = {
-        "storeId": ulid(),
-        "name": name,
-        "whatsapp": clean_whatsapp(body.get("whatsapp")),
-        "currency": clean_currency(body.get("currency")),
-        "brand": clean_brand(body.get("brand")),
-        "status": "draft",
-        "createdAt": _now(),
-    }
+    whatsapp = clean_whatsapp(body.get("whatsapp")) if body.get("whatsapp") else ""  # required later, at publish
+    currency = clean_currency(body.get("currency"))
+    brand = clean_brand(body.get("brand"))
 
     day = day_stamp()
     limits.bump(f"store#{ip_hash(event)}#{day}", 2 * DAY, limit=env_int("MAX_STORES_PER_DAY", 3))
     limits.bump(f"store#global#{day}", 2 * DAY, limit=env_int("MAX_GLOBAL_STORES_PER_DAY", 20))
 
-    for _ in range(5):
-        slug = slugify(name)
-        if not find_by_slug(slug):
-            break
-    else:
-        raise ApiError(503, "try_again", "Could not allocate a store address. Please retry.")
-    item["slug"] = slug
-
-    token = new_edit_token()
-    item["editTokenHash"] = hash_token(token)
-    table("TABLE_STORES").put_item(Item=item, ConditionExpression="attribute_not_exists(storeId)")
+    item, token = create_store_record(name, whatsapp, currency, brand)
     # The edit token is returned this once; only its hash is stored.
-    return response(201, {"storeId": item["storeId"], "slug": slug, "editToken": token})
+    return response(201, {"storeId": item["storeId"], "slug": item["slug"], "editToken": token})
 
 
 def publish_store(event: dict) -> dict:
     store = require_store(event, (event.get("pathParameters") or {}).get("storeId"))
+    if not store.get("whatsapp"):
+        raise ApiError(400, "whatsapp_required", "Add a WhatsApp number before publishing.")
+    products = table("TABLE_PRODUCTS").query(KeyConditionExpression=Key("storeId").eq(store["storeId"]))["Items"]
+    if not any(p.get("status") in READY for p in products):
+        raise ApiError(400, "no_ready_products", "Publish after at least one product has finished processing.")
     table("TABLE_STORES").update_item(
         Key={"storeId": store["storeId"]},
         UpdateExpression="SET #s = :published, publishedAt = :now",
         ExpressionAttributeNames={"#s": "status"},
-        ExpressionAttributeValues={":published": "published", ":now": _now()},
+        ExpressionAttributeValues={":published": "published", ":now": now_iso()},
     )
     return response(200, {"slug": store["slug"], "status": "published"})
 

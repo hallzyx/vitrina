@@ -16,6 +16,16 @@ def edit_headers(store):
     return {"X-Edit-Token": store["editToken"]}
 
 
+def add_ready_product(store, product_id="READY", **extra):
+    boto3.resource("dynamodb").Table("products").put_item(
+        Item={
+            "storeId": store["storeId"], "productId": product_id, "status": "ready_360", "name": "Ready vase",
+            "frameKeys": ["media/x/READY/f01.webp"], "thumbKeys": ["media/x/READY/t01.webp"],
+            "copy": {"en": {"name": "Ready vase", "description": "d"}, "es": {"name": "Jarrón", "description": "d"}}, **extra,
+        }
+    )
+
+
 def create_product(store, **overrides):
     body = {"photoCount": 12, "name": "Vase", "price": 48, **overrides}
     return call(
@@ -93,11 +103,35 @@ def test_create_store_is_limited_per_visitor_per_day():
 
 def test_publish_needs_the_edit_token():
     store = new_store()
+    add_ready_product(store)
     route, path = "POST /api/stores/{storeId}/publish", {"storeId": store["storeId"]}
     assert call(stores.handler, route, path=path)[0] == 403
     assert call(stores.handler, route, headers={"X-Edit-Token": "wrong"}, path=path)[0] == 403
-    assert call(stores.handler, route, headers=edit_headers(store), path={"storeId": "missing"})[0] == 404
+    # A valid token of this store used against another store id must not reveal whether it exists.
+    assert call(stores.handler, route, headers=edit_headers(store), path={"storeId": "missing"})[0] == 403
     assert call(stores.handler, route, headers=edit_headers(store), path=path) == (200, {"slug": store["slug"], "status": "published"})
+
+
+def test_publish_requires_a_whatsapp_number_and_a_finished_product():
+    route = "POST /api/stores/{storeId}/publish"
+    no_number = call(stores.handler, "POST /api/stores", {"name": "No Number"}, {"X-Access-Code": INVITE}, ip="198.51.100.20")[1]
+    add_ready_product(no_number)
+    status, body = call(stores.handler, route, headers=edit_headers(no_number), path={"storeId": no_number["storeId"]})
+    assert (status, body["error"]) == (400, "whatsapp_required")
+
+    store = new_store()
+    status, body = call(stores.handler, route, headers=edit_headers(store), path={"storeId": store["storeId"]})
+    assert (status, body["error"]) == (400, "no_ready_products")
+    create_product(store)  # still uploading: does not count
+    status, body = call(stores.handler, route, headers=edit_headers(store), path={"storeId": store["storeId"]})
+    assert (status, body["error"]) == (400, "no_ready_products")
+
+
+def test_the_edit_token_carries_the_store_id_and_is_not_stored():
+    store = new_store()
+    assert store["editToken"].startswith(store["storeId"] + ".") and len(store["editToken"]) > 60
+    item = boto3.resource("dynamodb").Table("stores").get_item(Key={"storeId": store["storeId"]})["Item"]
+    assert store["editToken"] not in str(item)
 
 
 # --- products -----------------------------------------------------------------------------------
@@ -144,7 +178,8 @@ def test_a_token_from_one_store_does_not_open_another():
 
 
 def publish(store):
-    call(stores.handler, "POST /api/stores/{storeId}/publish", headers=edit_headers(store), path={"storeId": store["storeId"]})
+    add_ready_product(store)
+    return call(stores.handler, "POST /api/stores/{storeId}/publish", headers=edit_headers(store), path={"storeId": store["storeId"]})
 
 
 def test_unpublished_stores_are_not_public():
@@ -154,21 +189,24 @@ def test_unpublished_stores_are_not_public():
 
 def test_public_store_hides_secrets_and_unfinished_products():
     store = new_store()
-    _, created = create_product(store)
-    publish(store)
-    table = boto3.resource("dynamodb").Table("products")
-    table.put_item(
-        Item={
-            "storeId": store["storeId"], "productId": "READY", "status": "ready_360", "name": "Ready vase",
-            "frameKeys": ["media/x/READY/f01.webp"], "copy": {"en": {"name": "Ready vase"}},
-        }
-    )
+    _, created = create_product(store)  # still uploading: must stay hidden
+    publish(store)  # adds one finished product, "READY"
     status, body = call(public.handler, "GET /api/public/stores/{slug}", path={"slug": store["slug"]})
     assert status == 200
     assert [p["id"] for p in body["products"]] == ["READY"]
     assert body["products"][0]["frames"] == ["/media/x/READY/f01.webp"]
+    assert body["products"][0]["thumbs"] == ["/media/x/READY/t01.webp"] and body["demo"] is False
     dumped = str(body)
     assert "editTokenHash" not in dumped and store["editToken"] not in dumped and created["productId"] not in dumped
+
+
+def test_demo_products_expose_their_sample_and_the_timings_of_their_recorded_run():
+    store = new_store()
+    add_ready_product(store, sample="elephant_carved", replay={"totalMs": 38500, "steps": [{"step": "validate", "ms": 3700}]})
+    call(stores.handler, "POST /api/stores/{storeId}/publish", headers=edit_headers(store), path={"storeId": store["storeId"]})
+    _, body = call(public.handler, "GET /api/public/stores/{slug}", path={"slug": store["slug"]})
+    product = body["products"][0]
+    assert product["sampleId"] == "elephant_carved" and product["replay"]["steps"][0] == {"step": "validate", "ms": 3700}
 
 
 def test_example_store_is_public_without_any_code():

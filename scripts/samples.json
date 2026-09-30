@@ -1,0 +1,39 @@
+{
+  "samples": [
+    {
+      "id": "elephant_carved",
+      "name": { "en": "Carved elephant", "es": "Elefante tallado" },
+      "photos": 12,
+      "kind": "render",
+      "credit": "Carved Wooden Elephant · Poly Haven · CC0"
+    },
+    {
+      "id": "vase_antique_01",
+      "name": { "en": "Blue floral vase", "es": "Jarrón floral azul" },
+      "photos": 12,
+      "kind": "render",
+      "credit": "Antique Ceramic Vase 01 · James Ray Cock · Poly Haven · CC0"
+    },
+    {
+      "id": "jug_01",
+      "name": { "en": "Floral jug", "es": "Jarra floral" },
+      "photos": 12,
+      "kind": "render",
+      "credit": "Jug 01 · Poly Haven · CC0"
+    },
+    {
+      "id": "basket_wicker_01",
+      "name": { "en": "Woven basket", "es": "Canasta tejida" },
+      "photos": 12,
+      "kind": "render",
+      "credit": "Wicker Basket 01 · Poly Haven · CC0"
+    },
+    {
+      "id": "bowl_wooden_01",
+      "name": { "en": "Rough-edged bowl", "es": "Bowl de borde irregular" },
+      "photos": 12,
+      "kind": "render",
+      "credit": "Wooden Bowl 01 · Poly Haven · CC0"
+    }
+  ]
+}

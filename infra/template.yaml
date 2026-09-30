@@ -50,6 +50,14 @@ Parameters:
     Type: String
     Default: models/isnet-general-use.onnx
     Description: S3 key (in the processed bucket) of the ONNX background-removal model.
+  MaxSampleRunsPerDay:
+    Type: Number
+    Default: 2
+    Description: Live runs on a sample photo set per visitor per day (no invite phrase needed for samples).
+  MaxGlobalSampleRunsPerDay:
+    Type: Number
+    Default: 20
+    Description: Live sample runs per day across all visitors. Past this the app replays the recorded run.
 
 Conditions:
   IsPaused: !Equals [!Ref Paused, "true"]
@@ -87,6 +95,8 @@ Globals:
         BEDROCK_MODEL_TEXT: !Ref BedrockModelText
         BEDROCK_MODEL_EMBED: !Ref BedrockModelEmbed
         SEGMENT_MODEL_KEY: !Ref SegmentModelKey
+        MAX_SAMPLE_RUNS_PER_DAY: !Ref MaxSampleRunsPerDay
+        MAX_GLOBAL_SAMPLE_RUNS_PER_DAY: !Ref MaxGlobalSampleRunsPerDay
 
 Resources:
   # ---------------------------------------------------------------- Data
@@ -298,6 +308,13 @@ Resources:
             Compress: true
             AllowedMethods: [GET, HEAD]
             CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6
+          # Demonstration photo sets (renders of CC0 scans) that visitors can run the pipeline on.
+          - PathPattern: /samples/*
+            TargetOriginId: processed
+            ViewerProtocolPolicy: redirect-to-https
+            Compress: true
+            AllowedMethods: [GET, HEAD]
+            CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6
           - PathPattern: /api/*
             TargetOriginId: api
             ViewerProtocolPolicy: https-only
@@ -335,7 +352,9 @@ Resources:
             Principal:
               Service: cloudfront.amazonaws.com
             Action: s3:GetObject
-            Resource: !Sub "${ProcessedBucket.Arn}/media/*"
+            Resource:
+              - !Sub "${ProcessedBucket.Arn}/media/*"
+              - !Sub "${ProcessedBucket.Arn}/samples/*"
             Condition:
               StringEquals:
                 AWS:SourceArn: !Sub "arn:${AWS::Partition}:cloudfront::${AWS::AccountId}:distribution/${Distribution}"
@@ -410,7 +429,7 @@ Resources:
               Resource: !GetAtt StoresTable.Arn
             - Effect: Allow
               Action: dynamodb:Query
-              Resource: !Sub "${StoresTable.Arn}/index/slug-index"
+              Resource: [!Sub "${StoresTable.Arn}/index/slug-index", !GetAtt ProductsTable.Arn]
       Events:
         CreateStore:
           Type: HttpApi
@@ -540,6 +559,73 @@ Resources:
       Policies:
         - LambdaInvokePolicy:
             FunctionName: !Ref PipelineFunction
+
+  # The creator's dashboard and edits (edit token): GET /api/me, PUT store, PUT product listing.
+  ManageFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: handlers.manage.handler
+      Policies:
+        - Version: "2012-10-17"
+          Statement:
+            - Effect: Allow
+              Action: [dynamodb:GetItem, dynamodb:UpdateItem]
+              Resource: !GetAtt StoresTable.Arn
+            - Effect: Allow
+              Action: [dynamodb:GetItem, dynamodb:UpdateItem, dynamodb:Query]
+              Resource: !GetAtt ProductsTable.Arn
+            - Effect: Allow
+              Action: dynamodb:Query
+              Resource: !GetAtt StatsTable.Arn
+      Events:
+        Me:
+          Type: HttpApi
+          Properties: { ApiId: !Ref HttpApi, Path: /api/me, Method: GET }
+        UpdateStore:
+          Type: HttpApi
+          Properties: { ApiId: !Ref HttpApi, Path: "/api/stores/{storeId}", Method: PUT }
+        UpdateProduct:
+          Type: HttpApi
+          Properties: { ApiId: !Ref HttpApi, Path: "/api/stores/{storeId}/products/{productId}", Method: PUT }
+
+  # POST /api/samples/{sampleId}/run: live pipeline run on a fixed demonstration photo set. No invite
+  # phrase (the inputs are fixed and known); bounded by per-visitor and global daily caps.
+  SamplesFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: handlers.samples.handler
+      Timeout: 30
+      Environment:
+        Variables:
+          STATE_MACHINE_ARN: !Ref PipelineStateMachine
+      Policies:
+        - Version: "2012-10-17"
+          Statement:
+            - Effect: Allow
+              Action: s3:GetObject
+              Resource: !Sub "arn:${AWS::Partition}:s3:::${AWS::StackName}-processed-${AWS::AccountId}-${AWS::Region}/samples/*"
+            - Effect: Allow
+              Action: s3:PutObject
+              Resource: !Sub "arn:${AWS::Partition}:s3:::${AWS::StackName}-raw-${AWS::AccountId}-${AWS::Region}/raw/*"
+            - Effect: Allow
+              Action: [dynamodb:GetItem, dynamodb:PutItem]
+              Resource: !GetAtt StoresTable.Arn
+            - Effect: Allow
+              Action: dynamodb:Query
+              Resource: !Sub "${StoresTable.Arn}/index/slug-index"
+            - Effect: Allow
+              Action: dynamodb:PutItem
+              Resource: !GetAtt ProductsTable.Arn
+            - Effect: Allow
+              Action: [dynamodb:GetItem, dynamodb:UpdateItem]
+              Resource: !GetAtt LimitsTable.Arn
+            - Effect: Allow
+              Action: states:StartExecution
+              Resource: !Ref PipelineStateMachine
+      Events:
+        RunSample:
+          Type: HttpApi
+          Properties: { ApiId: !Ref HttpApi, Path: "/api/samples/{sampleId}/run", Method: POST }
 
   # Public, code-free endpoints: published store, example store, view/click events.
   PublicFunction:

@@ -21,9 +21,14 @@ def _public_product(item: dict) -> dict:
         "id": item["productId"],
         "status": item["status"],
         "frames": [_frame_url(k) for k in item.get("frameKeys", [])],
+        "thumbs": [_frame_url(k) for k in item.get("thumbKeys", [])],
         "copy": item.get("copy", {}),
     }
-    for field in ("name", "price", "fidelityScore"):
+    if item.get("sample"):
+        out["sampleId"] = item["sample"]  # a demonstration product made from a sample photo set
+    if item.get("replay"):
+        out["replay"] = item["replay"]  # real per-step timings of the run that produced it, for replays
+    for field in ("name", "price", "fidelityScore", "fidelityChecked"):
         if field in item:
             out[field] = item[field]
     if item.get("glbKey"):
@@ -43,7 +48,8 @@ def _public_store(slug: str) -> dict:
         "brand": store.get("brand", {}),
         "whatsapp": store["whatsapp"],
         "currency": store["currency"],
-        "products": products,
+        "demo": bool(store.get("demo")),
+        "products": sorted(products, key=lambda p: p["id"]),
     }
 
 

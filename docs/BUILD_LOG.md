@@ -69,3 +69,7 @@ Format: `date-time (America/Lima) · what was requested · what the agent did ·
 - **Test data:** three test stores with their products, photos and frames were created through the real API and then deleted (tables and `raw/`, `media/`, `work/` confirmed empty); my own daily limit counters for testing were deleted too. The segmentation model was kept.
 - **Permission classifier:** a direct `sam deploy` earlier in the project was blocked as "apply without preview"; every deployment since follows create change set, review, execute.
 - **Tools:** AWS SAM CLI, AWS CLI (`bedrock`, `bedrock-runtime`, `stepfunctions`, `cloudformation`, `dynamodb`, `s3`, `s3api`), curl, pytest + moto, Pillow, numpy, onnxruntime, Blender (local demo photo sets).
+
+## 2026-09-30 · Global sample cap raised from 12 to 20 per day
+- **Requested by the owner:** more live runs on the sample sets for evaluators. Estimated cost about USD 0.02 per run, so at most about USD 0.40 per day at the cap.
+- **Done:** CloudFormation parameter `MaxGlobalSampleRunsPerDay` default 20 (template) and set explicitly on the stack with `--parameter-overrides` (SAM keeps the previous stack value for parameters that are not overridden, so changing only the default has no effect); reviewed change set, `UPDATE_COMPLETE`. Verified: stack parameter = 20 and `MAX_GLOBAL_SAMPLE_RUNS_PER_DAY=20` on `SamplesFunction`. The per-visitor cap stays at 2 per day. This is our own application cap, unrelated to the AWS Bedrock service quota (which only AWS can raise).

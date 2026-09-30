@@ -49,7 +49,8 @@ def s3():
 
 @functools.lru_cache(maxsize=None)
 def bedrock():
-    return boto3.client("bedrock-runtime", config=Config(read_timeout=120, retries={"max_attempts": 6, "mode": "adaptive"}))
+    # Throttling is retried with backoff in ai.with_backoff, so the SDK itself retries only lightly.
+    return boto3.client("bedrock-runtime", config=Config(read_timeout=120, retries={"max_attempts": 2, "mode": "standard"}))
 
 
 def raw_bucket() -> str:
