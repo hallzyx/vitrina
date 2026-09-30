@@ -24,3 +24,8 @@ def s3():
 @functools.lru_cache(maxsize=None)
 def ssm():
     return boto3.client("ssm")
+
+
+@functools.lru_cache(maxsize=None)
+def stepfunctions():
+    return boto3.client("stepfunctions")
