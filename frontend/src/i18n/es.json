@@ -23,7 +23,6 @@
   "viewer.tab360": "360°",
   "viewer.tab3d": "3D",
   "viewer.3dOff": "El 3D es un extra opcional y está desactivado en esta versión.",
-  "viewer.angle": "Ángulo",
   "viewer.aria": "Vista interactiva de 360°. Usa las flechas izquierda y derecha o arrastra para girar.",
   "landing.eyebrow": "Para ceramistas, tejedoras, torneros y artesanos",
   "landing.titleA": "Que tus clientes",
@@ -186,5 +185,7 @@
   "dash.demoNote": "Datos de demostración. En la app real estos números salen de tu propia tienda.",
   "notfound.title": "Página no encontrada",
   "error.title": "Algo salió mal al cargar esta página.",
-  "error.reload": "Recargar"
+  "error.reload": "Recargar",
+  "viewer.ariaNamed": "Vista de 360° de {name}. Usa las flechas izquierda y derecha o arrastra para girar.",
+  "viewer.failed": "No pudimos cargar las vistas de esta pieza. Revisa tu conexión y recarga la página."
 }

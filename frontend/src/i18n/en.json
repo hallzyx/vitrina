@@ -23,7 +23,6 @@
   "viewer.tab360": "360°",
   "viewer.tab3d": "3D",
   "viewer.3dOff": "3D is an optional extra and is switched off in this build.",
-  "viewer.angle": "Angle",
   "viewer.aria": "Interactive 360° view. Use the left and right arrow keys or drag to rotate.",
   "landing.eyebrow": "For potters, weavers, woodturners and makers",
   "landing.titleA": "Let buyers",
@@ -186,5 +185,7 @@
   "dash.demoNote": "Demo data. In the real app these numbers come from your own store.",
   "notfound.title": "Page not found",
   "error.title": "Something went wrong loading this page.",
-  "error.reload": "Reload"
+  "error.reload": "Reload",
+  "viewer.ariaNamed": "360° view of {name}. Use the left and right arrow keys or drag to rotate.",
+  "viewer.failed": "We could not load the views of this piece. Check your connection and reload the page."
 }
