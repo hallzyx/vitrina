@@ -55,7 +55,7 @@ export function ProductCard({ slug, currency, product, storeIsDemo = false, spin
       </div>
       <div className="flex items-end justify-between gap-2 px-3.5 pb-3.5 pt-3 sm:px-4">
         <div className="min-w-0">
-          <h3 className="truncate text-base font-medium text-ink sm:text-lg" lang={text.lang}>
+          <h3 className="line-clamp-2 text-base font-medium leading-snug text-ink sm:text-lg" lang={text.lang}>
             {text.name || t("product.untitled")}
           </h3>
           {hasPrice(product.price) && <span className="text-sm font-bold text-brand-strong">{money(product.price, currency)}</span>}

@@ -106,20 +106,19 @@ export function Processing({ run, onReady, onRestart }: { run: SavedRun; onReady
               ? t(stepKey(status.step))
               : t("processing.title")}
       </p>
-      <StepList
-        current={index}
-        failed={failed}
-        detail={inBackground ? { background: t("processing.photos", { done: photos.done, total: photos.total }) } : {}}
-      />
-
       {failed && (
-        <div className="mt-4 grid gap-3 rounded-2xl border border-[#e7b9ad] bg-[#fdf0ec] px-4 py-4 text-[#5e1f0f]" role="alert">
+        <div className="mb-4 grid gap-3 rounded-2xl border border-[#e7b9ad] bg-[#fdf0ec] px-4 py-4 text-[#5e1f0f]" role="alert">
           <p className="font-semibold">{t(pipelineErrorKey(status?.error?.code))}</p>
           <button type="button" className={btn("primary", "md", "w-full")} onClick={onRestart}>
             {run.origin === "sample" ? t("processing.tryOtherSample") : t("processing.tryOther")}
           </button>
         </div>
       )}
+      <StepList
+        current={index}
+        failed={failed}
+        detail={inBackground ? { background: t("processing.photos", { done: photos.done, total: photos.total }) } : {}}
+      />
       {!failed && pollError !== null && (
         <ErrorNote
           className="mt-4"
