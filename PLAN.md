@@ -17,11 +17,11 @@ Deadline: **Friday Oct 2, 11:59 PM PT = Saturday Oct 3, 1:59 AM Lima.** Real sub
 - [ ] *3D spike, 3-hour limit:* can an acceptable GLB be generated on SageMaker? Record the result in `docs/DECISIONS.md`.
 
 ## Thursday Oct 1 — Complete product
-- [ ] Frontend: guided capture, processing, 360° viewer, store, buyer view, dashboard with edit link.
-- [ ] i18n EN/ES with browser-language default and a toggle.
-- [ ] Add a second product inheriting the brand.
+- [x] Frontend: guided capture, processing, 360° viewer, store, buyer view, dashboard with edit link (all on the real API; deployed).
+- [x] i18n EN/ES with browser-language default and a toggle.
+- [ ] Add a second product inheriting the brand. (Implemented: the pipeline skips the brand step when the store already has one, and /create?add=1 exists; not yet verified live end to end.)
 - [ ] Pre-generated public example store (`/s/example`), no code.
-- [ ] View/click counters, guardrails (limits, access code).
+- [x] View/click counters, guardrails (limits, access code, sample caps).
 - [ ] **3D decision at noon:** if the spike worked, integrate behind the feature flag; otherwise drop it, no regrets.
 
 ## Friday Oct 2 — Polish and submission
