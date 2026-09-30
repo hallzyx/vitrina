@@ -59,8 +59,13 @@ export function I18nProvider({ children }: { children: ReactNode }) {
         return text;
       },
       l: (value) => value[lang] || value.en,
-      money: (amount, currency = "USD") =>
-        new Intl.NumberFormat(lang === "es" ? "es-PE" : "en-US", { style: "currency", currency }).format(amount),
+      money: (amount, currency = "USD") => {
+        try {
+          return new Intl.NumberFormat(lang === "es" ? "es-PE" : "en-US", { style: "currency", currency }).format(amount);
+        } catch {
+          return `${currency} ${amount.toFixed(2)}`; // unknown currency code: never break the page
+        }
+      },
     }),
     [lang, setLang],
   );

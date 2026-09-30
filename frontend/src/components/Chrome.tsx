@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { LuCheck, LuCopy, LuLanguages } from "react-icons/lu";
+import { LuBox, LuCheck, LuCopy, LuHistory, LuLanguages, LuRefreshCw, LuTriangleAlert } from "react-icons/lu";
 import { Link } from "react-router-dom";
-import { useI18n } from "../i18n";
+import { useI18n, type TKey } from "../i18n";
 import { btn, muted } from "./ui";
 
 export function LogoMark({ size = 28 }: { size?: number }) {
@@ -83,13 +83,53 @@ export function Topbar({ cta = false, dark = false }: { cta?: boolean; dark?: bo
   );
 }
 
+/** Only for products made from an artisan's own photos. Never shown on demonstration products. */
 export function RealBadge() {
   const { t } = useI18n();
   return (
     <span className="inline-flex items-center gap-1.5 rounded-full border border-olive/35 bg-olive/10 px-3 py-1 text-[0.8rem] font-semibold text-olive-deep">
-      <LuCheck aria-hidden="true" className="size-3.5" strokeWidth={3} /> {t("badge.real")}
+      <LuCheck aria-hidden="true" className="size-3.5 shrink-0" strokeWidth={3} /> {t("badge.real")}
     </span>
   );
+}
+
+/** Honest label for products made from the sample photo sets (renders of 3D-scanned models). */
+export function DemoBadge({ compact = false }: { compact?: boolean }) {
+  const { t } = useI18n();
+  return (
+    <span className="inline-flex items-start gap-1.5 rounded-2xl border border-ochre/50 bg-ochre/15 px-3 py-1 text-[0.8rem] font-semibold text-[#6b4a07]">
+      <LuBox aria-hidden="true" className="mt-0.5 size-3.5 shrink-0" /> {compact ? t("badge.demoShort") : t("badge.demo")}
+    </span>
+  );
+}
+
+export function ProvenanceBadge({ demo }: { demo: boolean }) {
+  return demo ? <DemoBadge /> : <RealBadge />;
+}
+
+/** Shown wherever the user sees output of an earlier run instead of a live one. */
+export function RecordedNote({ children }: { children?: ReactNode }) {
+  const { t } = useI18n();
+  return (
+    <p className="flex items-start gap-2 rounded-2xl border border-line bg-paper-2/70 px-3.5 py-2.5 text-sm text-ink" role="note">
+      <LuHistory aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-terracotta-deep" />
+      <span>{children ?? t("store.recordedNote")}</span>
+    </p>
+  );
+}
+
+/**
+ * Fidelity line that never overstates the check: a missing score says the check was unavailable,
+ * and a check that covered fewer frames than are shown says so.
+ */
+export function FidelityLine({ score, checked, frames }: { score?: number | null; checked?: number | null; frames: number }) {
+  const { t } = useI18n();
+  let text: string;
+  if (typeof score !== "number") text = t("fidelity.unavailable", { total: frames });
+  else if (typeof checked === "number" && checked < frames) text = t("fidelity.partial", { score: score.toFixed(2), checked, total: frames });
+  else if (typeof checked === "number") text = t("fidelity.full", { score: score.toFixed(2), total: frames });
+  else text = t("fidelity.score", { score: score.toFixed(2), total: frames });
+  return <p className="text-sm text-ink-soft">{text}</p>;
 }
 
 export function CopyButton({ text }: { text: string }) {
@@ -124,22 +164,74 @@ export function Footer({ children }: { children?: ReactNode }) {
   return (
     <footer className="container-page border-t border-line py-10 text-center text-sm">
       <p className="mb-1">{children ?? t("footer.built")}</p>
-      <p className={muted}>{t("footer.demoNote")}</p>
+      <p className={muted}>{t("footer.note")}</p>
     </footer>
   );
 }
 
 /** Centered message page (404s and missing stores/products). */
-export function EmptyState({ title, action }: { title: string; action: ReactNode }) {
+export function EmptyState({ title, body, action, code = "404" }: { title: string; body?: string; action: ReactNode; code?: string | null }) {
   return (
     <main className="container-page grid min-h-[60vh] place-items-center py-20 text-center">
-      <div>
-        <p className="font-display text-7xl font-semibold text-terracotta/30 sm:text-8xl" aria-hidden="true">
-          404
-        </p>
-        <h1 className="mb-6 text-3xl sm:text-4xl">{title}</h1>
-        {action}
+      <div className="max-w-lg">
+        {code && (
+          <p className="font-display text-7xl font-semibold text-terracotta/30 sm:text-8xl" aria-hidden="true">
+            {code}
+          </p>
+        )}
+        <h1 className="mb-3 text-3xl sm:text-4xl">{title}</h1>
+        {body && <p className="mb-6 text-ink-soft">{body}</p>}
+        <div className={`flex flex-wrap justify-center gap-3 ${body ? "" : "mt-6"}`}>{action}</div>
       </div>
     </main>
   );
+}
+
+/** Inline error with an optional retry. Announced to screen readers. */
+export function ErrorNote({ message, onRetry, className = "" }: { message: string; onRetry?: () => void; className?: string }) {
+  const { t } = useI18n();
+  return (
+    <div className={`flex flex-wrap items-center gap-3 rounded-2xl border border-[#e7b9ad] bg-[#fdf0ec] px-4 py-3 text-sm text-[#7a2a16] ${className}`} role="alert">
+      <LuTriangleAlert aria-hidden="true" className="size-5 shrink-0" />
+      <span className="min-w-0 flex-1">{message}</span>
+      {onRetry && (
+        <button type="button" className={btn("outline", "sm")} onClick={onRetry}>
+          <LuRefreshCw aria-hidden="true" className="size-3.5" /> {t("common.retry")}
+        </button>
+      )}
+    </div>
+  );
+}
+
+/** Full-page error for a failed load (API down, bad link), never a blank page. */
+export function LoadError({ titleKey, bodyKey, onRetry }: { titleKey: TKey; bodyKey?: TKey; onRetry?: () => void }) {
+  const { t } = useI18n();
+  return (
+    <EmptyState
+      code={null}
+      title={t(titleKey)}
+      body={bodyKey ? t(bodyKey) : undefined}
+      action={
+        <>
+          {onRetry && (
+            <button type="button" className={btn("primary")} onClick={onRetry}>
+              <LuRefreshCw aria-hidden="true" className="size-4" /> {t("common.retry")}
+            </button>
+          )}
+          <Link to="/" className={btn(onRetry ? "outline" : "primary")}>
+            {t("store.backHome")}
+          </Link>
+        </>
+      }
+    />
+  );
+}
+
+/** Neutral placeholder block for loading skeletons. */
+export function Skeleton({ className = "" }: { className?: string }) {
+  return <span className={`block animate-pulse-soft rounded-xl bg-paper-2 ${className}`} aria-hidden="true" />;
+}
+
+export function Spinner({ className = "size-5" }: { className?: string }) {
+  return <span className={`inline-block animate-spin rounded-full border-2 border-sand border-t-terracotta ${className}`} aria-hidden="true" />;
 }

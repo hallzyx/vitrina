@@ -506,7 +506,7 @@ export function LandingFooter() {
           <LogoMark size={32} />
           <div>
             <p className="font-semibold text-paper">{t("footer.built")}</p>
-            <p>{t("footer.demoNote")}</p>
+            <p>{t("footer.note")}</p>
           </div>
         </div>
         <LangToggle dark />
