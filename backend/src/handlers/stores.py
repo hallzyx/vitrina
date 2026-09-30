@@ -6,7 +6,7 @@ from common.access import require_code
 from common.aws import table
 from common.config import env_int
 from common.http import ApiError, api, header, json_body, response
-from common.security import day_stamp, ip_hash
+from common.security import day_stamp, ip_hash, is_allowlisted
 from common.stores import create_store_record, now_iso, require_store
 from common.validation import clean_brand, clean_currency, clean_text, clean_whatsapp
 
@@ -25,7 +25,8 @@ def create_store(event: dict) -> dict:
     brand = clean_brand(body.get("brand"))
 
     day = day_stamp()
-    limits.bump(f"store#{ip_hash(event)}#{day}", 2 * DAY, limit=env_int("MAX_STORES_PER_DAY", 3))
+    if not is_allowlisted(event):
+        limits.bump(f"store#{ip_hash(event)}#{day}", 2 * DAY, limit=env_int("MAX_STORES_PER_DAY", 3))
     limits.bump(f"store#global#{day}", 2 * DAY, limit=env_int("MAX_GLOBAL_STORES_PER_DAY", 20))
 
     item, token = create_store_record(name, whatsapp, currency, brand)

@@ -1,6 +1,7 @@
 """Hashing, tokens and client identification."""
 import hashlib
 import hmac
+import os
 import secrets
 from datetime import datetime, timezone
 
@@ -34,6 +35,17 @@ def client_ip(event: dict) -> str:
 
 def ip_hash(event: dict) -> str:
     return sha256_hex(f"vitrina|{client_ip(event)}")[:32]
+
+
+def is_allowlisted(event: dict) -> bool:
+    """True if the viewer's IP is on the owner's allowlist (`ALLOWLISTED_IPS`, comma separated).
+
+    The allowlist only skips the PER-VISITOR daily counters. The global caps, the invite phrase and the
+    failed-phrase lockout still apply, because a public IP can be shared (home routers, carrier-grade NAT)
+    and it must not become a way around authentication or the overall spending limits.
+    """
+    allowed = {ip.strip() for ip in os.environ.get("ALLOWLISTED_IPS", "").split(",") if ip.strip()}
+    return bool(allowed) and client_ip(event) in allowed
 
 
 def day_stamp() -> str:

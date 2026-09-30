@@ -6,7 +6,7 @@ from common.aws import s3, table
 from common.config import ALLOWED_PHOTO_TYPES, env, env_int
 from common.http import ApiError, api, json_body, response
 from common.ids import ulid
-from common.security import day_stamp, ip_hash
+from common.security import day_stamp, ip_hash, is_allowlisted
 from common.stores import require_store
 from common.validation import clean_price, clean_text
 
@@ -31,7 +31,8 @@ def create_product(event: dict) -> dict:
     price = clean_price(body.get("price"))
 
     day = day_stamp()
-    limits.bump(f"prod#{ip_hash(event)}#{day}", 2 * DAY, limit=env_int("MAX_PRODUCTS_PER_DAY", 3))
+    if not is_allowlisted(event):
+        limits.bump(f"prod#{ip_hash(event)}#{day}", 2 * DAY, limit=env_int("MAX_PRODUCTS_PER_DAY", 3))
     limits.bump(f"prod#global#{day}", 2 * DAY, limit=env_int("MAX_GLOBAL_PRODUCTS_PER_DAY", 30))
 
     store_id, product_id = store["storeId"], ulid()

@@ -5,7 +5,7 @@ from common import limits
 from common.aws import table
 from common.config import env, env_int
 from common.http import ApiError, api, json_body, response
-from common.security import day_stamp, ip_hash
+from common.security import day_stamp, ip_hash, is_allowlisted
 from common.stores import find_by_slug
 
 VISIBLE = {"ready_360", "ready_3d"}
@@ -72,7 +72,8 @@ def record_event(event: dict) -> dict:
     if not store or store.get("status") != "published":
         raise ApiError(404, "not_found", "Store not found.")
 
-    limits.bump(f"evt#{ip_hash(event)}#{day_stamp()}", 2 * DAY, limit=env_int("MAX_EVENTS_PER_DAY", 500))
+    if not is_allowlisted(event):
+        limits.bump(f"evt#{ip_hash(event)}#{day_stamp()}", 2 * DAY, limit=env_int("MAX_EVENTS_PER_DAY", 500))
     counter = "views" if kind == "view" else "clicks"
     stats = table("TABLE_STATS")
     for sort_key in ["STATS"] + ([f"P#{product_id}"] if product_id else []):

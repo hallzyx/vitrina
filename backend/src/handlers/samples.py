@@ -14,7 +14,7 @@ from common.aws import s3, stepfunctions, table
 from common.config import env, env_int
 from common.http import ApiError, api, json_body, response
 from common.ids import ulid
-from common.security import day_stamp, ip_hash
+from common.security import day_stamp, ip_hash, is_allowlisted
 from common.stores import create_store_record, now_iso
 from common.validation import clean_text
 
@@ -44,7 +44,8 @@ def run(event: dict) -> dict:
 
     day = day_stamp()
     try:
-        limits.bump(f"sample#{ip_hash(event)}#{day}", 2 * DAY, limit=env_int("MAX_SAMPLE_RUNS_PER_DAY", 2))
+        if not is_allowlisted(event):  # the owner's IP skips only the per-visitor cap
+            limits.bump(f"sample#{ip_hash(event)}#{day}", 2 * DAY, limit=env_int("MAX_SAMPLE_RUNS_PER_DAY", 2))
         limits.bump(f"sample#global#{day}", 2 * DAY, limit=env_int("MAX_GLOBAL_SAMPLE_RUNS_PER_DAY", 12))
     except ApiError:
         raise ApiError(429, "sample_cap", "Live sample runs are paused for today. You can watch a recorded run instead.") from None

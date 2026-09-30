@@ -52,12 +52,19 @@ Parameters:
     Description: S3 key (in the processed bucket) of the ONNX background-removal model.
   MaxSampleRunsPerDay:
     Type: Number
-    Default: 2
+    Default: 5
     Description: Live runs on a sample photo set per visitor per day (no invite phrase needed for samples).
   MaxGlobalSampleRunsPerDay:
     Type: Number
     Default: 20
     Description: Live sample runs per day across all visitors. Past this the app replays the recorded run.
+  AllowlistedIps:
+    Type: String
+    Default: none
+    Description: >-
+      Comma-separated public IPs that skip the PER-VISITOR daily counters (owner testing). Global caps, the
+      invite phrase and the failed-phrase lockout still apply. Set it at deploy time with --parameter-overrides;
+      never commit a real IP.
 
 Conditions:
   IsPaused: !Equals [!Ref Paused, "true"]
@@ -97,6 +104,7 @@ Globals:
         SEGMENT_MODEL_KEY: !Ref SegmentModelKey
         MAX_SAMPLE_RUNS_PER_DAY: !Ref MaxSampleRunsPerDay
         MAX_GLOBAL_SAMPLE_RUNS_PER_DAY: !Ref MaxGlobalSampleRunsPerDay
+        ALLOWLISTED_IPS: !Ref AllowlistedIps
 
 Resources:
   # ---------------------------------------------------------------- Data
