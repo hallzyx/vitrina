@@ -14,7 +14,7 @@ Deadline: **Friday Oct 2, 11:59 PM PT = Saturday Oct 3, 1:59 AM Lima.** Real sub
 - [x] Fidelity check with embeddings: floor 0.80 plus "0.05 below the set's median"; measured on renders, to be re-checked with real photos.
 - [x] Brand and listing with Amazon Nova Pro (no invented materials, origin or measurements; validated).
 - [ ] Test with **real phone photos** (at least one set) to confirm sharpness and fidelity thresholds. Five demo sets (vase, basket, bowl, elephant, jug) are rendered from CC0 3D scans and already pass.
-- [ ] *3D spike, 3-hour limit:* can an acceptable GLB be generated on SageMaker? Record the result in `docs/DECISIONS.md`.
+- [x] *3D spike, 3-hour limit:* **dropped** (see docs/DECISIONS.md); it was can an acceptable GLB be generated on SageMaker? Record the result in `docs/DECISIONS.md`.
 
 ## Thursday Oct 1 — Complete product
 - [x] Frontend: guided capture, processing, 360° viewer, store, buyer view, dashboard with edit link (all on the real API; deployed).
@@ -22,7 +22,7 @@ Deadline: **Friday Oct 2, 11:59 PM PT = Saturday Oct 3, 1:59 AM Lima.** Real sub
 - [ ] Add a second product inheriting the brand. (Implemented: the pipeline skips the brand step when the store already has one, and /create?add=1 exists; not yet verified live end to end.)
 - [ ] Pre-generated public example store (`/s/example`), no code.
 - [x] View/click counters, guardrails (limits, access code, sample caps).
-- [ ] **3D decision at noon:** if the spike worked, integrate behind the feature flag; otherwise drop it, no regrets.
+- [x] **3D decision at noon:** dropped, no regrets. if the spike worked, integrate behind the feature flag; otherwise drop it, no regrets.
 
 ## Friday Oct 2 — Polish and submission
 - [ ] Landing (desktop and mobile), translation review, basic accessibility.
