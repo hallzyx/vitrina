@@ -102,6 +102,17 @@ npm run dev       # local development
 npm run build     # type-check + production build (dist/)
 ```
 
+### Backend
+
+`backend/src` holds the Lambdas (Python 3.12, `boto3` from the runtime, no extra dependencies): `handlers/` (one module per function) and `common/` (validation, limits, security, SSM access). Create and edit endpoints sit behind an **invite phrase** kept in SSM Parameter Store; public endpoints and the example store never need it. See [`SPEC.md`](SPEC.md) §6 for the API and [`docs/DECISIONS.md`](docs/DECISIONS.md) for the reasoning.
+
+```bash
+cd backend
+python -m venv .venv && . .venv/bin/activate      # Windows: .venv\Scripts\activate
+pip install -r requirements-dev.txt
+pytest                                            # moto-backed tests, no AWS account needed
+```
+
 ## 🗂️ Repository layout
 
 ```
@@ -159,6 +170,7 @@ Built for the AWS **Zero to Shipped** hackathon (Sep 18 – Oct 2, 2026).
 - [x] Limited IAM user, permissions boundary and USD 20/month budget alarm
 - [x] SAM skeleton: S3 + CloudFront + `GET /health`
 - [x] Skeleton deployed with a public URL → https://dz81nhpgrhb93.cloudfront.net
+- [x] Backend base: DynamoDB, S3, invite-phrase gate, store/product creation with presigned uploads, public endpoints, daily limits
 - [ ] 360° pipeline end to end (Step Functions + Bedrock)
 - [x] Frontend screens with demo data: landing, guided capture, brand, processing, 360° viewer, publish, store, buyer view, dashboard (EN/ES)
 - [ ] Real data: example store from the API (`/s/example`) and real 360° frames

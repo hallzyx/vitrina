@@ -30,3 +30,18 @@
 - **motion** (`motion/react`) for scroll-linked storytelling and reveals, only inside the landing chunk. `MotionConfig reducedMotion="user"` plus explicit static layouts keep `prefers-reduced-motion` users on simple fades.
 - **react-icons** (Lucide set only, per-icon imports) replaced every emoji icon.
 - Route-level code splitting with `React.lazy`; three.js has its own chunk (`manualChunks`). An error boundary offers a reload if a route chunk fails to load (e.g. after a redeploy).
+
+## 2026-09-29 · Invite phrase and API guardrails
+- **Scope of the invite phrase:** required to create a store (`POST /api/stores`) and, when the pipeline exists, to start processing (`.../start`), which is the step that spends Bedrock/GPU money. Adding products to an existing store uses the edit token that was issued after the phrase, plus per-visitor and global daily caps. Everything public (example store, viewer, store pages, events) never asks for it, so the ship gate holds for judges and AI systems.
+- **Where the phrase lives:** SSM Parameter Store SecureString `/vitrina/prod/access-code`; the Lambdas get only its *name* (`ACCESS_CODE_PARAM_NAME`) and read it with a 5-minute cache. It is not a plain environment variable (visible in the Lambda console and CloudFormation) and never a `VITE_*` variable (bundled into public JavaScript). The chosen phrase was shared in chat by the owner; it is low-risk and is rotated with one `aws ssm put-parameter --overwrite`.
+- **Brute force:** 10 wrong phrases per IP per hour, then 429 (`MAX_FAILED_ATTEMPTS`). Comparison is constant time on SHA-256 digests. Codes and tokens are never logged.
+- **Quotas count only valid requests:** validation runs before the counters are incremented (a unit test guards this), so a typo does not burn a visitor's daily allowance. Global daily caps (20 stores, 30 products) bound total spend if IPs rotate.
+- **Client identity:** behind CloudFront the API sees the edge IP, so limits use the `CloudFront-Viewer-Address` header (set by CloudFront, not spoofable) and fall back to the socket IP for direct calls. IPs are stored only as hashes with a TTL.
+
+## 2026-09-29 · Same-origin API, uploads and SPA routing
+- The API is exposed through CloudFront at `/api/*` (origin path = stage), so the SPA calls a relative URL and needs no CORS or `VITE_API_URL`. A custom cache policy (TTL 0) and an origin request policy forward only the headers the API needs.
+- The SPA fallback moved from distribution-wide `CustomErrorResponses` to a CloudFront Function on the site behavior. Distribution-wide error responses would have turned the API's own 403/404 answers into `index.html`.
+- Photos are uploaded with **presigned POST** (not PUT) because only POST policies can enforce `content-length-range` (8 MB), the exact `Content-Type` and the exact key. Verified live: a tampered field or key gets 403 and a 9 MB file gets 400 `EntityTooLarge`. Content-based type checks (magic bytes) happen in the pipeline.
+- Buckets are named explicitly (`<stack>-raw|processed-<account>-<region>`) and referenced by name from the functions, which breaks a dependency cycle (API -> functions -> bucket CORS -> CloudFront -> API).
+- `/media/*` on CloudFront serves the processed bucket (frames, GLB) through OAC; the raw bucket is never public.
+- Each function has its own least-privilege policy (all under the `vitrina-boundary` permissions boundary); the tables are pay-per-request and there is no resource with a fixed hourly cost.

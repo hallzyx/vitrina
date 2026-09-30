@@ -29,19 +29,23 @@ Creator flow: Home → Capture → Brand (first time only) → Processing → Vi
 **Stores** — PK `storeId` (ULID). Attributes: `slug` (GSI `slug-index`), `name`, `brand {colors[], tone, displayName}`, `whatsapp`, `currency`, `editTokenHash` (SHA-256; never the token), `status` (`draft|published`), `createdAt`.
 **Products** — PK `storeId`, SK `productId`. Attributes: `name`, `price`, `status` (`uploading|processing|ready_360|ready_3d|failed`), `rawKeys[]`, `frameKeys[]`, `glbKey?`, `fidelityScore`, `copy {en,es}`, `createdAt`.
 **Stats** — PK `storeId`, SK `STATS`. Atomic counters (`views`, `clicks`) and per-product counters.
-**Limits** — PK `visitorKey` (hash of IP + day), counter of products created; with TTL.
+**Limits** — PK `visitorKey`, atomic `count`, TTL attribute `expiresAt`. Keys: `fail#<ipHash>#<hour>` (wrong phrases), `store#<ipHash>#<day>` and `prod#<ipHash>#<day>` (per visitor), `store#global#<day>` and `prod#global#<day>` (global daily cap on spend), `evt#<ipHash>#<day>` (events). Counters are incremented only after the request validates, so a typo never burns a quota.
 
 ## 6. API
-Writes (creator) require the `X-Edit-Token` header. Generation requires `X-Access-Code` except for the example store.
-- `POST /stores` → creates a store; returns `storeId` and `editToken` **only once**.
-- `POST /stores/{storeId}/products` → creates a product; returns presigned URLs to upload photos (max 24, ≤ 8 MB each, JPEG/PNG/WebP).
-- `POST /stores/{storeId}/products/{productId}/start` → validates and starts Step Functions.
-- `GET /stores/{storeId}/products/{productId}/status` → state and per-step progress.
-- `PUT /stores/{storeId}` and `PUT /stores/{storeId}/products/{productId}` → edit brand, price, WhatsApp; `POST /stores/{storeId}/publish`.
-- `GET /public/stores/{slug}` → store + published products (cacheable in CloudFront).
-- `POST /public/events` → `view` or `click` (rate limited).
-- `GET /public/example` → pre-generated example store (**no code**).
-- `GET /health` → liveness check.
+Served from the same origin as the site under `/api/*` (CloudFront routes it to API Gateway), so there is no CORS. Writes by the creator require the `X-Edit-Token` header. Anything that creates a store or spends money on generation requires the **invite phrase** in `X-Access-Code`; the example store and everything public never do. Status: ✅ implemented, ⏳ planned.
+- ✅ `POST /api/access/verify` → checks the invite phrase (body `{code}`) without side effects; 401 if wrong, 429 after too many failures from one IP.
+- ✅ `POST /api/stores` (invite phrase) → creates a store; returns `storeId`, `slug` and `editToken` **only once**.
+- ✅ `POST /api/stores/{storeId}/products` (edit token) → creates a product; returns one **presigned POST form** per photo (6–24 photos, ≤ 8 MB each, JPEG/PNG/WebP; size, type and key are enforced by the signed policy).
+- ✅ `POST /api/stores/{storeId}/publish` (edit token) → makes the store public.
+- ✅ `GET /api/public/stores/{slug}` → published store + its `ready_*` products.
+- ✅ `GET /api/public/example` → pre-generated example store (**no code**).
+- ✅ `POST /api/public/events` → `view` or `click` (rate limited).
+- ✅ `GET /api/health` → liveness check.
+- ⏳ `POST /api/stores/{storeId}/products/{productId}/start` (invite phrase) → validates and starts Step Functions.
+- ⏳ `GET /api/stores/{storeId}/products/{productId}/status` → state and per-step progress.
+- ⏳ `PUT /api/stores/{storeId}` and `PUT /api/stores/{storeId}/products/{productId}` → edit brand, price, WhatsApp.
+
+Error shape: `{"error": "<code>", "message": "<text>"}` with codes such as `invalid_code`, `too_many_attempts`, `limit_reached`, `forbidden`, `not_found`, `invalid_request`.
 
 ## 7. Per-product pipeline (Step Functions)
 1. **Validate:** photo count (≥ 6), minimum resolution, sharpness (Laplacian variance), file type. Clear user-facing error if it fails.
@@ -60,7 +64,7 @@ Retries with backoff on Bedrock steps; explicit timeouts; state visible to the U
 - Badge: "View made from the artisan's real photos" (translated).
 
 ## 9. Guardrails and security
-- Pre-generated, public example store; live generation asks for a code (`X-Access-Code`, value in SSM).
+- Pre-generated, public example store; store creation and live generation ask for an invite phrase (`X-Access-Code`), whose value lives only in SSM Parameter Store (SecureString) and is compared in constant time. It is never a `VITE_*` variable (those are bundled into public JavaScript). The browser keeps it in `sessionStorage` only.
 - Limits: max 3 products/day per visitor; API Gateway throttling; limited file size and count; type validation by content.
 - Edit token ≥ 128 random bits, constant-time comparison, only its hash in the DB.
 - S3 with no public access; minimal CORS; no logs containing tokens or codes.
