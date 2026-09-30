@@ -34,6 +34,22 @@ Parameters:
     Type: Number
     Default: 10
     Description: Wrong invite phrases allowed per IP per hour.
+  FidelityThreshold:
+    Type: String
+    Default: "0.80"
+    Description: Minimum embedding similarity between a processed frame and its original photo.
+  BedrockModelText:
+    Type: String
+    Default: amazon.nova-pro-v1:0
+    Description: Text and vision model for the listing and brand suggestion. Amazon models need no Marketplace subscription.
+  BedrockModelEmbed:
+    Type: String
+    Default: amazon.titan-embed-image-v1
+    Description: Multimodal embedding model for the fidelity check.
+  SegmentModelKey:
+    Type: String
+    Default: models/isnet-general-use.onnx
+    Description: S3 key (in the processed bucket) of the ONNX background-removal model.
 
 Conditions:
   IsPaused: !Equals [!Ref Paused, "true"]
@@ -67,6 +83,10 @@ Globals:
         MIN_PHOTOS: "6"
         MAX_PHOTOS: "24"
         MAX_PHOTO_MB: "8"
+        FIDELITY_THRESHOLD: !Ref FidelityThreshold
+        BEDROCK_MODEL_TEXT: !Ref BedrockModelText
+        BEDROCK_MODEL_EMBED: !Ref BedrockModelEmbed
+        SEGMENT_MODEL_KEY: !Ref SegmentModelKey
 
 Resources:
   # ---------------------------------------------------------------- Data
@@ -424,6 +444,102 @@ Resources:
         CreateProduct:
           Type: HttpApi
           Properties: { ApiId: !Ref HttpApi, Path: "/api/stores/{storeId}/products", Method: POST }
+
+  # POST .../start (invite phrase + edit token) launches the pipeline; GET .../status reports progress.
+  PipelineApiFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: handlers.pipeline_api.handler
+      Environment:
+        Variables:
+          STATE_MACHINE_ARN: !Ref PipelineStateMachine
+      Policies:
+        - Version: "2012-10-17"
+          Statement:
+            - Effect: Allow
+              Action: ssm:GetParameter
+              Resource: !Sub "arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter${AccessCodeParamName}"
+            - Effect: Allow
+              Action: kms:Decrypt
+              Resource: !Sub "arn:${AWS::Partition}:kms:${AWS::Region}:${AWS::AccountId}:key/*"
+              Condition:
+                StringEquals:
+                  kms:ViaService: !Sub "ssm.${AWS::Region}.amazonaws.com"
+            - Effect: Allow
+              Action: [dynamodb:GetItem, dynamodb:UpdateItem]
+              Resource: !GetAtt LimitsTable.Arn
+            - Effect: Allow
+              Action: dynamodb:GetItem
+              Resource: !GetAtt StoresTable.Arn
+            - Effect: Allow
+              Action: [dynamodb:GetItem, dynamodb:UpdateItem]
+              Resource: !GetAtt ProductsTable.Arn
+            - Effect: Allow
+              Action: s3:GetObject
+              Resource: !Sub "arn:${AWS::Partition}:s3:::${AWS::StackName}-raw-${AWS::AccountId}-${AWS::Region}/raw/*"
+            - Effect: Allow
+              Action: states:StartExecution
+              Resource: !Ref PipelineStateMachine
+      Events:
+        StartProcessing:
+          Type: HttpApi
+          Properties: { ApiId: !Ref HttpApi, Path: "/api/stores/{storeId}/products/{productId}/start", Method: POST }
+        ProcessingStatus:
+          Type: HttpApi
+          Properties: { ApiId: !Ref HttpApi, Path: "/api/stores/{storeId}/products/{productId}/status", Method: GET }
+
+  # The pipeline steps. Needs Pillow, numpy and onnxruntime, so it has its own package and more memory.
+  # Only Amazon models and in-function segmentation are used: nothing here needs a Marketplace subscription.
+  PipelineFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ../backend/pipeline/
+      Handler: handler.handler
+      MemorySize: 3008
+      Timeout: 300
+      EphemeralStorage:
+        Size: 1024
+      Policies:
+        - Version: "2012-10-17"
+          Statement:
+            - Effect: Allow
+              Action: s3:GetObject
+              Resource: !Sub "arn:${AWS::Partition}:s3:::${AWS::StackName}-raw-${AWS::AccountId}-${AWS::Region}/raw/*"
+            - Effect: Allow
+              Action: [s3:GetObject, s3:PutObject, s3:DeleteObject]
+              Resource:
+                - !Sub "arn:${AWS::Partition}:s3:::${AWS::StackName}-processed-${AWS::AccountId}-${AWS::Region}/work/*"
+                - !Sub "arn:${AWS::Partition}:s3:::${AWS::StackName}-processed-${AWS::AccountId}-${AWS::Region}/media/*"
+            - Effect: Allow
+              Action: s3:GetObject
+              Resource: !Sub "arn:${AWS::Partition}:s3:::${AWS::StackName}-processed-${AWS::AccountId}-${AWS::Region}/models/*"
+            - Effect: Allow
+              Action: s3:ListBucket
+              Resource: !Sub "arn:${AWS::Partition}:s3:::${AWS::StackName}-processed-${AWS::AccountId}-${AWS::Region}"
+              Condition:
+                StringLike:
+                  s3:prefix: ["work/*"]
+            - Effect: Allow
+              Action: [dynamodb:GetItem, dynamodb:UpdateItem]
+              Resource: [!GetAtt ProductsTable.Arn, !GetAtt StoresTable.Arn]
+            - Effect: Allow
+              Action: bedrock:InvokeModel
+              Resource:
+                - !Sub "arn:${AWS::Partition}:bedrock:${AWS::Region}::foundation-model/${BedrockModelText}"
+                - !Sub "arn:${AWS::Partition}:bedrock:${AWS::Region}::foundation-model/${BedrockModelEmbed}"
+
+  PipelineStateMachine:
+    Type: AWS::Serverless::StateMachine
+    Properties:
+      Name: !Sub "${AWS::StackName}-pipeline"
+      Type: STANDARD
+      DefinitionUri: pipeline.asl.json
+      DefinitionSubstitutions:
+        PipelineFunctionArn: !GetAtt PipelineFunction.Arn
+      PermissionsBoundary: !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:policy/vitrina-boundary"
+      Policies:
+        - LambdaInvokePolicy:
+            FunctionName: !Ref PipelineFunction
 
   # Public, code-free endpoints: published store, example store, view/click events.
   PublicFunction:

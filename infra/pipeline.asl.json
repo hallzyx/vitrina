@@ -1,0 +1,141 @@
+{
+  "Comment": "Vitrina product pipeline: validate, remove backgrounds, align, check fidelity, brand, listing",
+  "StartAt": "Validate",
+  "States": {
+    "Validate": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "${PipelineFunctionArn}",
+        "Payload": { "task": "validate", "storeId.$": "$.storeId", "productId.$": "$.productId" }
+      },
+      "ResultSelector": { "photos.$": "$.Payload.photos", "dropped.$": "$.Payload.dropped" },
+      "ResultPath": "$.validate",
+      "TimeoutSeconds": 120,
+      "Retry": [{ "ErrorEquals": ["Lambda.ServiceException", "Lambda.AWSLambdaException", "Lambda.SdkClientException", "Lambda.TooManyRequestsException"], "IntervalSeconds": 2, "MaxAttempts": 3, "BackoffRate": 2 }],
+      "Catch": [{ "ErrorEquals": ["States.ALL"], "ResultPath": "$.error", "Next": "MarkFailed" }],
+      "Next": "ProcessPhotos"
+    },
+    "ProcessPhotos": {
+      "Type": "Map",
+      "ItemsPath": "$.validate.photos",
+      "MaxConcurrency": 4,
+      "ItemSelector": {
+        "task": "process_photo",
+        "storeId.$": "$.storeId",
+        "productId.$": "$.productId",
+        "photo.$": "$$.Map.Item.Value"
+      },
+      "ItemProcessor": {
+        "ProcessorConfig": { "Mode": "INLINE" },
+        "StartAt": "ProcessPhoto",
+        "States": {
+          "ProcessPhoto": {
+            "Type": "Task",
+            "Resource": "arn:aws:states:::lambda:invoke",
+            "Parameters": { "FunctionName": "${PipelineFunctionArn}", "Payload.$": "$" },
+            "OutputPath": "$.Payload",
+            "TimeoutSeconds": 290,
+            "Retry": [
+              { "ErrorEquals": ["Lambda.ServiceException", "Lambda.AWSLambdaException", "Lambda.SdkClientException", "Lambda.TooManyRequestsException", "ClientError", "EndpointConnectionError", "ReadTimeoutError"], "IntervalSeconds": 3, "MaxAttempts": 4, "BackoffRate": 2 }
+            ],
+            "End": true
+          }
+        }
+      },
+      "ResultPath": "$.photos",
+      "Catch": [{ "ErrorEquals": ["States.ALL"], "ResultPath": "$.error", "Next": "MarkFailed" }],
+      "Next": "Align"
+    },
+    "Align": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "${PipelineFunctionArn}",
+        "Payload": { "task": "align", "storeId.$": "$.storeId", "productId.$": "$.productId", "photos.$": "$.photos" }
+      },
+      "ResultSelector": { "frames.$": "$.Payload.frames", "mode.$": "$.Payload.mode" },
+      "ResultPath": "$.align",
+      "TimeoutSeconds": 290,
+      "Retry": [{ "ErrorEquals": ["Lambda.ServiceException", "Lambda.AWSLambdaException", "Lambda.SdkClientException", "Lambda.TooManyRequestsException", "ClientError"], "IntervalSeconds": 3, "MaxAttempts": 3, "BackoffRate": 2 }],
+      "Catch": [{ "ErrorEquals": ["States.ALL"], "ResultPath": "$.error", "Next": "MarkFailed" }],
+      "Next": "Fidelity"
+    },
+    "Fidelity": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "${PipelineFunctionArn}",
+        "Payload": { "task": "fidelity", "storeId.$": "$.storeId", "productId.$": "$.productId", "frames.$": "$.align.frames" }
+      },
+      "ResultSelector": { "kept.$": "$.Payload.kept", "dropped.$": "$.Payload.dropped", "score.$": "$.Payload.score" },
+      "ResultPath": "$.fidelity",
+      "TimeoutSeconds": 120,
+      "Retry": [{ "ErrorEquals": ["Lambda.ServiceException", "Lambda.AWSLambdaException", "Lambda.SdkClientException", "Lambda.TooManyRequestsException", "ClientError"], "IntervalSeconds": 2, "MaxAttempts": 3, "BackoffRate": 2 }],
+      "Catch": [{ "ErrorEquals": ["States.ALL"], "ResultPath": "$.error", "Next": "MarkFailed" }],
+      "Next": "Brand"
+    },
+    "Brand": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "${PipelineFunctionArn}",
+        "Payload": { "task": "brand", "storeId.$": "$.storeId", "productId.$": "$.productId", "frames.$": "$.fidelity.kept" }
+      },
+      "ResultPath": null,
+      "TimeoutSeconds": 120,
+      "Retry": [{ "ErrorEquals": ["Lambda.ServiceException", "Lambda.AWSLambdaException", "Lambda.SdkClientException", "Lambda.TooManyRequestsException", "ClientError"], "IntervalSeconds": 3, "MaxAttempts": 3, "BackoffRate": 2 }],
+      "Catch": [{ "ErrorEquals": ["States.ALL"], "ResultPath": "$.error", "Next": "MarkFailed" }],
+      "Next": "Listing"
+    },
+    "Listing": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "${PipelineFunctionArn}",
+        "Payload": { "task": "listing", "storeId.$": "$.storeId", "productId.$": "$.productId", "frames.$": "$.fidelity.kept" }
+      },
+      "ResultSelector": { "copy.$": "$.Payload.copy", "fallback.$": "$.Payload.fallback" },
+      "ResultPath": "$.listing",
+      "TimeoutSeconds": 180,
+      "Retry": [{ "ErrorEquals": ["Lambda.ServiceException", "Lambda.AWSLambdaException", "Lambda.SdkClientException", "Lambda.TooManyRequestsException", "ClientError"], "IntervalSeconds": 3, "MaxAttempts": 3, "BackoffRate": 2 }],
+      "Catch": [{ "ErrorEquals": ["States.ALL"], "ResultPath": "$.error", "Next": "MarkFailed" }],
+      "Next": "Finalize"
+    },
+    "Finalize": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "${PipelineFunctionArn}",
+        "Payload": {
+          "task": "finalize",
+          "storeId.$": "$.storeId",
+          "productId.$": "$.productId",
+          "frames.$": "$.fidelity.kept",
+          "score.$": "$.fidelity.score",
+          "copy.$": "$.listing.copy"
+        }
+      },
+      "ResultPath": null,
+      "TimeoutSeconds": 120,
+      "Retry": [{ "ErrorEquals": ["Lambda.ServiceException", "Lambda.AWSLambdaException", "Lambda.SdkClientException", "Lambda.TooManyRequestsException", "ClientError"], "IntervalSeconds": 2, "MaxAttempts": 3, "BackoffRate": 2 }],
+      "Catch": [{ "ErrorEquals": ["States.ALL"], "ResultPath": "$.error", "Next": "MarkFailed" }],
+      "End": true
+    },
+    "MarkFailed": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "${PipelineFunctionArn}",
+        "Payload": { "task": "fail", "storeId.$": "$.storeId", "productId.$": "$.productId", "error.$": "$.error" }
+      },
+      "ResultPath": null,
+      "Next": "Failed"
+    },
+    "Failed": {
+      "Type": "Fail",
+      "Error": "PipelineFailed",
+      "Cause": "The failure was recorded on the product; see its status."
+    }
+  }
+}
