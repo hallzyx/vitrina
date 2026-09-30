@@ -171,7 +171,9 @@ Built for the AWS **Zero to Shipped** hackathon (Sep 18 – Oct 2, 2026).
 - [x] SAM skeleton: S3 + CloudFront + `GET /health`
 - [x] Skeleton deployed with a public URL → https://dz81nhpgrhb93.cloudfront.net
 - [x] Backend base: DynamoDB, S3, invite-phrase gate, store/product creation with presigned uploads, public endpoints, daily limits
-- [ ] 360° pipeline end to end (Step Functions + Bedrock)
+- [x] 360° pipeline end to end (Step Functions, in-function segmentation, Titan, Nova): 12 photos to a spinnable product in about 40 s, verified on the public URL
+- [ ] Frontend wired to the real pipeline (upload, live progress, real frames in the viewer)
+- [ ] Sample gallery (renders of CC0 scans) and the pre-processed example store
 - [x] Frontend screens with demo data: landing, guided capture, brand, processing, 360° viewer, publish, store, buyer view, dashboard (EN/ES)
 - [ ] Real data: example store from the API (`/s/example`) and real 360° frames
 - [ ] Optional 3D branch (`ENABLE_3D`)

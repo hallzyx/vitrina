@@ -41,20 +41,21 @@ Served from the same origin as the site under `/api/*` (CloudFront routes it to 
 - ✅ `GET /api/public/example` → pre-generated example store (**no code**).
 - ✅ `POST /api/public/events` → `view` or `click` (rate limited).
 - ✅ `GET /api/health` → liveness check.
-- ⏳ `POST /api/stores/{storeId}/products/{productId}/start` (invite phrase) → validates and starts Step Functions.
-- ⏳ `GET /api/stores/{storeId}/products/{productId}/status` → state and per-step progress.
+- ✅ `POST /api/stores/{storeId}/products/{productId}/start` (invite phrase + edit token) → checks the uploads exist (≥ 6), claims the product (`uploading`/`failed` → `processing`, max 3 attempts) and starts Step Functions. 202 on success.
+- ✅ `GET /api/stores/{storeId}/products/{productId}/status` (edit token) → `status`, current `step` (validate, background, align, fidelity, brand, listing, ready), photo progress, an `error.code` when failed (`not_enough_photos`, `too_blurry`, `invalid_image`, `no_object`, `low_fidelity`, `timeout`, `internal_error`) and, when ready, the frame and thumbnail URLs, the EN/ES copy, the fidelity score and the brand.
 - ⏳ `PUT /api/stores/{storeId}` and `PUT /api/stores/{storeId}/products/{productId}` → edit brand, price, WhatsApp.
 
 Error shape: `{"error": "<code>", "message": "<text>"}` with codes such as `invalid_code`, `too_many_attempts`, `limit_reached`, `forbidden`, `not_found`, `invalid_request`.
 
 ## 7. Per-product pipeline (Step Functions)
-1. **Validate:** photo count (≥ 6), minimum resolution, sharpness (Laplacian variance), file type. Clear user-facing error if it fails.
-2. **Remove background** from each photo. Options to evaluate (pick the best and cheapest): a background-removal task in a Bedrock image model if available in the region, or a library (e.g. rembg) in a container Lambda. *To be validated.*
-3. **Align and center:** crop, scale and compose on a neutral background; order the angles. Generate 12–24 WebP frames and thumbnails.
-4. **Brand** (only if the store has none yet): palette via k-means over the object's pixels + suggested name and tone from a multimodal Bedrock model.
-5. **Fidelity:** multimodal embeddings of each processed frame vs. its original photo; cosine similarity. Frames below the threshold are dropped; if fewer than 6 remain, the product becomes `failed` with a useful message. Store the average as `fidelityScore`.
-6. **Listing:** name and short description in EN/ES from a Bedrock text model, based on the photos and what the artisan wrote. Do not invent materials, origin or dimensions the user did not provide.
-7. **Mark `ready_360`.** From here the product can be viewed and published.
+Status: ✅ steps 1–7 implemented and verified end to end on the public URL (about 35–40 s for 12 photos). One Lambda (`backend/pipeline`, Python 3.12 arm64, 3 GB) runs every step; Step Functions orchestrates and retries. No step needs an AWS Marketplace subscription.
+1. **Validate:** real file type by content (JPEG/PNG/WebP), minimum side 600 px, sharpness (variance of the Laplacian on a 512 px copy). A photo is blurry if it is below an absolute floor (12) or below 35% of the set's median; measured on real renders, sharp photos score 70–650 and the same photos blurred (radius 3) score 2.5–15. Needs ≥ 6 usable photos, otherwise `failed` with `not_enough_photos` or `too_blurry`.
+2. **Remove background** of each photo (4 in parallel) with `isnet-general-use`, an ONNX segmentation model (Apache-2.0) that runs inside the Lambda. It is pure segmentation: the piece's pixels stay exactly as photographed (verified: zero difference inside the mask). The model file lives in S3 (`models/`) and is copied to `/tmp` per warm container. Stability AI's remove-background (Bedrock) gave equivalent cutouts (IoU 0.997 on the test piece) but needs a Marketplace subscription; Nova Canvas v1 is "Legacy" and blocked for new accounts.
+3. **Align and center:** every frame shares one scale and one floor line; the union of all frames is fitted and centered with a 6% margin, so nothing is clipped even when perspective moves a foot lower in some views. A steady camera (tripod or turntable) keeps one fixed axis; a hand-held set is re-centered per frame with light smoothing. Output: transparent 1024 px WebP frames and 320 px thumbnails under `media/`.
+4. **Fidelity:** Titan Multimodal embeddings of the original photo's crop vs. the processed cutout (on neutral gray); cosine similarity per frame. A frame is dropped if it is below an absolute floor (`FIDELITY_THRESHOLD`, 0.80) or more than `FIDELITY_MAX_DROP` (0.05) below the set's own median, so a uniformly lower baseline on cluttered real photos does not reject good frames. Measured: a correct cutout scores 0.96–0.99, scattered holes 0.82–0.88, a lost quarter of the piece 0.92–0.97 (a coarse detector, not a pixel-exact one). Fewer than 6 frames left → `failed` with `low_fidelity`. The average is stored as `fidelityScore`.
+5. **Brand** (only if the store has none yet): palette by k-means over the piece's pixels, plus a suggested display name and tone from Amazon Nova Pro. Names that hint at a material ("Woody", "Clayworks") are discarded.
+6. **Listing:** name and short description in EN/ES from Amazon Nova Pro, based on the photos and what the artisan wrote. The model is told to describe only what is visible; its answer is then checked for materials, techniques, origin and measurements the artisan did not give (English and Spanish equivalents count as the same claim). One repair attempt, then a fallback made only of the artisan's own words.
+7. **Mark `ready_360`.** From here the product can be viewed and published. Intermediate cutouts are deleted.
 8. **3D branch (optional, `ENABLE_3D`):** if enabled, invoke the SageMaker async endpoint with the frames; store the (optimized/compressed) GLB and move to `ready_3d`. Any failure here is logged and **does not affect** `ready_360`.
 Retries with backoff on Bedrock steps; explicit timeouts; state visible to the UI.
 

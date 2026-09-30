@@ -10,10 +10,10 @@ Deadline: **Friday Oct 2, 11:59 PM PT = Saturday Oct 3, 1:59 AM Lima.** Real sub
 
 ## Wednesday Sep 30 — End-to-end 360° pipeline
 - [ ] DynamoDB, S3 and presigned URLs; `POST /stores` and product creation.
-- [ ] Step Functions: validate → remove background → align → frames. Decide the background-removal method.
-- [ ] Fidelity check with embeddings (initial threshold 0.80, tune with real photos).
-- [ ] Brand and listing with Bedrock.
-- [ ] Test with **3 real pieces** of different materials (ceramic, textile, wood).
+- [x] Step Functions: validate → remove background → align → frames. Background removal decided: ONNX segmentation inside the Lambda (Nova Canvas v1 is Legacy; Stability needs a Marketplace subscription that does not complete on this account).
+- [x] Fidelity check with embeddings: floor 0.80 plus "0.05 below the set's median"; measured on renders, to be re-checked with real photos.
+- [x] Brand and listing with Amazon Nova Pro (no invented materials, origin or measurements; validated).
+- [ ] Test with **real phone photos** (at least one set) to confirm sharpness and fidelity thresholds. Five demo sets (vase, basket, bowl, elephant, jug) are rendered from CC0 3D scans and already pass.
 - [ ] *3D spike, 3-hour limit:* can an acceptable GLB be generated on SageMaker? Record the result in `docs/DECISIONS.md`.
 
 ## Thursday Oct 1 — Complete product
