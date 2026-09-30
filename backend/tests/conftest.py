@@ -19,6 +19,11 @@ ENV = {
     "TABLE_STATS": "stats",
     "TABLE_LIMITS": "limits",
     "BUCKET_RAW": "raw-bucket",
+    "BUCKET_PROCESSED": "processed-bucket",
+    "BEDROCK_MODEL_TEXT": "test-text-model",
+    "BEDROCK_MODEL_EMBED": "test-embed-model",
+    "FIDELITY_THRESHOLD": "0.80",
+    "STATE_MACHINE_ARN": "arn:aws:states:us-east-1:123456789012:stateMachine:test",
     "ACCESS_CODE_PARAM_NAME": "/vitrina/test/access-code",
     "EXAMPLE_STORE_SLUG": "example",
     "MAX_FAILED_ATTEMPTS": "3",
@@ -59,7 +64,13 @@ def aws(monkeypatch):
         aws_module._dynamodb.cache_clear()
         aws_module.s3.cache_clear()
         aws_module.ssm.cache_clear()
+        aws_module.stepfunctions.cache_clear()
         access.reset_cache()
+        import core as pipeline_core
+
+        pipeline_core._dynamodb.cache_clear()
+        pipeline_core.s3.cache_clear()
+        pipeline_core.bedrock.cache_clear()
 
         ddb = boto3.resource("dynamodb")
         ddb.create_table(
@@ -109,5 +120,6 @@ def aws(monkeypatch):
             BillingMode="PAY_PER_REQUEST",
         )
         boto3.client("s3").create_bucket(Bucket="raw-bucket")
+        boto3.client("s3").create_bucket(Bucket="processed-bucket")
         boto3.client("ssm").put_parameter(Name="/vitrina/test/access-code", Value=INVITE, Type="SecureString")
         yield

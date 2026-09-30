@@ -1,0 +1,249 @@
+"""Runs every pipeline task in the order Step Functions would, with AWS simulated and the models stubbed."""
+import io
+from decimal import Decimal
+
+import boto3
+import numpy as np
+import pytest
+from PIL import Image, ImageDraw
+
+import ai
+import tasks
+from core import PipelineError
+
+STORE, PRODUCT = "STORE1", "PROD1"
+
+
+def make_photo(index: int, size=(900, 900), blur=False) -> bytes:
+    """A gray studio background with a colored piece that shifts a little from photo to photo."""
+    image = Image.new("RGB", size, (150, 150, 150))
+    draw = ImageDraw.Draw(image)
+    cx = 450 + (index % 3 - 1) * 6
+    draw.ellipse((cx - 170, 250, cx + 170, 780), fill=(196, 108, 76))
+    draw.rectangle((cx - 60, 170, cx + 60, 300), fill=(196, 108, 76))
+    # Fine texture, like real paper and pottery, so a sharp photo has detail and a blurred one loses it.
+    noise = np.random.default_rng(index).normal(0, 7, (size[1], size[0], 1))
+    image = Image.fromarray(np.clip(np.asarray(image, dtype=np.float32) + noise, 0, 255).astype(np.uint8))
+    if blur:
+        from PIL import ImageFilter
+
+        image = image.filter(ImageFilter.GaussianBlur(25))
+    buf = io.BytesIO()
+    image.save(buf, "JPEG", quality=92)
+    return buf.getvalue()
+
+
+@pytest.fixture
+def stubs(monkeypatch):
+    # Segmentation: anything far from the gray background is "the piece".
+    def fake_alpha(image):
+        arr = np.asarray(image.convert("RGB"), dtype=np.float32)
+        return (np.abs(arr - 150).max(axis=2) > 25).astype(np.float32)
+
+    # Embeddings: a color histogram, so a cutout on gray resembles its photo without being identical.
+    def fake_embed(jpeg):
+        arr = np.asarray(Image.open(io.BytesIO(jpeg)).convert("RGB").resize((32, 32)), dtype=np.float32)
+        return np.concatenate([arr[..., c].ravel()[:64] for c in range(3)]) + 1.0
+
+    answers = {
+        "listing": {
+            "en": {"name": "Terracotta vessel", "description": "A rounded vessel with a narrow neck and a warm reddish color."},
+            "es": {"name": "Vasija terracota", "description": "Una vasija redondeada de cuello estrecho y un cálido color rojizo."},
+        },
+        "brand": {"displayName": "Warm Ember", "tone": "warm"},
+    }
+    calls = []
+
+    def fake_converse(system, content, max_tokens=900):
+        kind = "brand" if "brand identity" in system else "listing"
+        calls.append(kind)
+        return answers[kind]
+
+    monkeypatch.setattr(tasks, "segment_alpha", fake_alpha)
+    monkeypatch.setattr(ai, "titan_embed", fake_embed)
+    monkeypatch.setattr(ai, "converse_json", fake_converse)
+    return {"answers": answers, "calls": calls}
+
+
+def seed(count=10, blurry=(), name="Terracotta vessel", notes=""):
+    s3 = boto3.client("s3")
+    keys = []
+    for i in range(1, count + 1):
+        key = f"raw/{STORE}/{PRODUCT}/{i:02d}.jpg"
+        s3.put_object(Bucket="raw-bucket", Key=key, Body=make_photo(i, blur=i in blurry))
+        keys.append(key)
+    db = boto3.resource("dynamodb")
+    db.Table("stores").put_item(Item={"storeId": STORE, "name": "Casa", "slug": "casa-1", "brand": {}, "status": "draft", "editTokenHash": "x"})
+    db.Table("products").put_item(
+        Item={"storeId": STORE, "productId": PRODUCT, "status": "processing", "rawKeys": keys, "name": name, "notes": notes, "frameKeys": [], "copy": {}}
+    )
+
+
+def run_pipeline():
+    base = {"storeId": STORE, "productId": PRODUCT}
+    validated = tasks.validate(base)
+    photos = [tasks.process_photo({**base, "photo": p}) for p in validated["photos"]]
+    aligned = tasks.align({**base, "photos": photos})
+    checked = tasks.fidelity({**base, "frames": aligned["frames"]})
+    tasks.brand({**base, "frames": checked["kept"]})
+    written = tasks.listing({**base, "frames": checked["kept"]})
+    tasks.finalize({**base, "frames": checked["kept"], "score": checked["score"], "copy": written["copy"]})
+    return validated, aligned, checked, written
+
+
+def product():
+    return boto3.resource("dynamodb").Table("products").get_item(Key={"storeId": STORE, "productId": PRODUCT})["Item"]
+
+
+def test_full_run_produces_a_ready_360_product(stubs):
+    seed(10)
+    validated, aligned, checked, written = run_pipeline()
+
+    item = product()
+    assert item["status"] == "ready_360" and item["step"] == "ready"
+    assert len(item["frameKeys"]) == 10 and len(item["thumbKeys"]) == 10
+    assert item["frameKeys"][0] == f"media/{STORE}/{PRODUCT}/f01.webp"
+    assert isinstance(item["fidelityScore"], Decimal) and 0.8 <= float(item["fidelityScore"]) <= 1
+    assert item["copy"]["es"]["name"] == "Vasija terracota"
+    assert aligned["mode"] == "steady"
+
+    s3 = boto3.client("s3")
+    frame = Image.open(io.BytesIO(s3.get_object(Bucket="processed-bucket", Key=item["frameKeys"][0])["Body"].read()))
+    assert frame.size == (1024, 1024) and frame.format == "WEBP" and frame.mode == "RGBA"
+    assert np.asarray(frame)[..., 3].min() == 0  # transparent background
+    thumb = Image.open(io.BytesIO(s3.get_object(Bucket="processed-bucket", Key=item["thumbKeys"][0])["Body"].read()))
+    assert thumb.size == (320, 320)
+    assert "Contents" not in s3.list_objects_v2(Bucket="processed-bucket", Prefix=f"work/{STORE}/{PRODUCT}/")  # scratch removed
+
+    brand = boto3.resource("dynamodb").Table("stores").get_item(Key={"storeId": STORE})["Item"]["brand"]
+    assert len(brand["colors"]) == 4 and brand["tone"] == "warm" and brand["displayName"] == "Warm Ember"
+
+
+def test_brand_names_that_claim_a_material_are_not_used(stubs):
+    stubs["answers"]["brand"] = {"displayName": "Warm Clay", "tone": "rustic"}
+    seed(8)
+    run_pipeline()
+    brand = boto3.resource("dynamodb").Table("stores").get_item(Key={"storeId": STORE})["Item"]["brand"]
+    assert "displayName" not in brand and brand["tone"] == "rustic"
+
+
+def test_piece_pixels_are_not_altered_by_the_pipeline(stubs):
+    """Fidelity: inside the piece, the frame is the photo. The pipeline only adds transparency."""
+    seed(8)
+    run_pipeline()
+    s3 = boto3.client("s3")
+    original = np.asarray(Image.open(io.BytesIO(make_photo(1))).convert("RGB"), dtype=np.float32)
+    frame = np.asarray(
+        Image.open(io.BytesIO(s3.get_object(Bucket="processed-bucket", Key=product()["frameKeys"][0])["Body"].read()))
+    )
+    solid = frame[..., 3] == 255
+    # The piece's color in the frame matches the color it had in the photo.
+    assert np.abs(frame[..., :3][solid].mean(axis=0) - np.array([196, 108, 76])).max() < 4
+    assert solid.sum() > 10000 and original.shape[0] == 900
+
+
+def test_brand_is_only_set_for_the_first_product(stubs):
+    seed(8)
+    boto3.resource("dynamodb").Table("stores").update_item(
+        Key={"storeId": STORE}, UpdateExpression="SET brand = :b", ExpressionAttributeValues={":b": {"colors": ["#111111"], "tone": "rustic"}}
+    )
+    run_pipeline()
+    brand = boto3.resource("dynamodb").Table("stores").get_item(Key={"storeId": STORE})["Item"]["brand"]
+    assert brand == {"colors": ["#111111"], "tone": "rustic"}  # inherited, untouched
+    assert "brand" not in stubs["calls"]
+
+
+def test_too_few_usable_photos_fails_with_a_clear_code(stubs):
+    seed(10, blurry=(1, 2, 3, 4, 5, 6, 7))
+    with pytest.raises(PipelineError) as err:
+        tasks.validate({"storeId": STORE, "productId": PRODUCT})
+    assert err.value.code in ("too_blurry", "not_enough_photos")
+
+
+def test_a_single_blurry_photo_is_dropped_but_the_run_continues(stubs):
+    seed(10, blurry=(4,))
+    validated = tasks.validate({"storeId": STORE, "productId": PRODUCT})
+    assert [d for d in validated["dropped"] if d["index"] == 4][0]["reason"] == "blurry"
+    assert len(validated["photos"]) == 9
+
+
+def test_frames_below_the_fidelity_threshold_are_dropped(stubs, monkeypatch):
+    seed(10)
+    base = {"storeId": STORE, "productId": PRODUCT}
+    photos = [tasks.process_photo({**base, "photo": p}) for p in tasks.validate(base)["photos"]]
+    photos[2]["fidelity"] = 0.55
+    aligned = tasks.align({**base, "photos": photos})
+    checked = tasks.fidelity({**base, "frames": aligned["frames"]})
+    assert checked["dropped"] == [photos[2]["index"]] and len(checked["kept"]) == 9
+    keys = [o["Key"] for o in boto3.client("s3").list_objects_v2(Bucket="processed-bucket", Prefix="media/")["Contents"]]
+    assert f"media/{STORE}/{PRODUCT}/f03.webp" not in keys
+
+
+def test_a_frame_far_below_its_own_sets_median_is_dropped_even_above_the_floor(stubs):
+    base = {"storeId": STORE, "productId": PRODUCT}
+    seed(8)
+    scores = [0.97, 0.98, 0.97, 0.90, 0.98, 0.97, 0.96, 0.98]  # the 0.90 is above the 0.80 floor but far below 0.97
+    frames = [
+        {"index": i, "frameKey": f"media/{STORE}/{PRODUCT}/f{i:02d}.webp", "thumbKey": f"media/{STORE}/{PRODUCT}/t{i:02d}.webp", "fidelity": s}
+        for i, s in enumerate(scores, start=1)
+    ]
+    checked = tasks.fidelity({**base, "frames": frames})
+    assert checked["dropped"] == [4] and len(checked["kept"]) == 7
+
+
+def test_a_uniformly_lower_baseline_does_not_drop_good_frames(stubs):
+    """Real photos with cluttered backgrounds score lower for every frame; that alone is not a failure."""
+    base = {"storeId": STORE, "productId": PRODUCT}
+    seed(8)
+    scores = [0.90, 0.91, 0.89, 0.90, 0.92, 0.90, 0.89, 0.91]
+    frames = [
+        {"index": i, "frameKey": f"media/{STORE}/{PRODUCT}/f{i:02d}.webp", "thumbKey": f"media/{STORE}/{PRODUCT}/t{i:02d}.webp", "fidelity": s}
+        for i, s in enumerate(scores, start=1)
+    ]
+    assert tasks.fidelity({**base, "frames": frames})["dropped"] == []
+
+
+def test_fidelity_fails_the_product_when_too_few_frames_remain(stubs):
+    base = {"storeId": STORE, "productId": PRODUCT}
+    seed(8)
+    frames = [{"index": i, "frameKey": f"media/{STORE}/{PRODUCT}/f{i:02d}.webp", "thumbKey": f"media/{STORE}/{PRODUCT}/t{i:02d}.webp", "fidelity": 0.5} for i in range(1, 9)]
+    with pytest.raises(PipelineError) as err:
+        tasks.fidelity({**base, "frames": frames})
+    assert err.value.code == "low_fidelity"
+
+
+def test_a_photo_with_no_piece_in_it_is_reported_not_crashed(stubs):
+    seed(8)
+    empty = Image.new("RGB", (900, 900), (150, 150, 150))
+    buf = io.BytesIO()
+    empty.save(buf, "JPEG")
+    boto3.client("s3").put_object(Bucket="raw-bucket", Key=f"raw/{STORE}/{PRODUCT}/01.jpg", Body=buf.getvalue())
+    result = tasks.process_photo({"storeId": STORE, "productId": PRODUCT, "photo": {"index": 1, "key": f"raw/{STORE}/{PRODUCT}/01.jpg"}})
+    assert result == {"index": 1, "ok": False, "reason": "no_object"}
+
+
+def test_listing_retries_then_falls_back_when_the_model_invents_claims(stubs):
+    seed(8, notes="Jarrón pequeño")
+    stubs["answers"]["listing"] = {
+        "en": {"name": "Handmade ceramic vase", "description": "A 30 cm handmade ceramic vase from Peru."},
+        "es": {"name": "Jarrón de cerámica", "description": "Un jarrón de cerámica hecho a mano."},
+    }
+    base = {"storeId": STORE, "productId": PRODUCT}
+    photos = [tasks.process_photo({**base, "photo": p}) for p in tasks.validate(base)["photos"]]
+    frames = tasks.fidelity({**base, "frames": tasks.align({**base, "photos": photos})["frames"]})["kept"]
+    result = tasks.listing({**base, "frames": frames})
+    assert result["fallback"] is True
+    assert stubs["calls"].count("listing") == 2  # one try plus one repair attempt
+    assert result["copy"]["es"]["description"] == "Jarrón pequeño"  # only what the artisan wrote
+
+
+def test_fail_task_records_a_translatable_code(stubs):
+    seed(8)
+    cause = '{"errorMessage": "not_enough_photos: Only 3 of 12 photos are usable.", "errorType": "PipelineError"}'
+    tasks.fail({"storeId": STORE, "productId": PRODUCT, "error": {"Error": "PipelineError", "Cause": cause}})
+    item = product()
+    assert item["status"] == "failed" and item["error"]["code"] == "not_enough_photos"
+    tasks.fail({"storeId": STORE, "productId": PRODUCT, "error": {"Error": "States.Timeout", "Cause": ""}})
+    assert product()["error"]["code"] == "timeout"
+    tasks.fail({"storeId": STORE, "productId": PRODUCT, "error": {"Error": "Boom", "Cause": "kaboom"}})
+    assert product()["error"]["code"] == "internal_error"
