@@ -148,10 +148,19 @@
     {
       "Sid": "DenyOtherRegionsForCompute",
       "Effect": "Deny",
-      "Action": ["lambda:*", "states:*", "dynamodb:*", "apigateway:*", "bedrock:*"],
+      "Action": ["lambda:*", "states:*", "dynamodb:*", "apigateway:*"],
       "Resource": "*",
       "Condition": {
         "StringNotEquals": { "aws:RequestedRegion": "us-east-1" }
+      }
+    },
+    {
+      "Sid": "DenyBedrockOutsideUs",
+      "Effect": "Deny",
+      "Action": "bedrock:*",
+      "Resource": "*",
+      "Condition": {
+        "StringNotEquals": { "aws:RequestedRegion": ["us-east-1", "us-east-2", "us-west-2"] }
       }
     }
   ]
