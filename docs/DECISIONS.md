@@ -45,3 +45,10 @@
 - Buckets are named explicitly (`<stack>-raw|processed-<account>-<region>`) and referenced by name from the functions, which breaks a dependency cycle (API -> functions -> bucket CORS -> CloudFront -> API).
 - `/media/*` on CloudFront serves the processed bucket (frames, GLB) through OAC; the raw bucket is never public.
 - Each function has its own least-privilege policy (all under the `vitrina-boundary` permissions boundary); the tables are pay-per-request and there is no resource with a fixed hourly cost.
+
+## 2026-09-29 · Demo photo sets: rendered from CC0 3D scans, not AI-generated photos
+- **What was tried first:** a single AI-generated "contact sheet" of 12 views of a terracotta vase. It looked photorealistic, but each cell is an independent image: the carved pattern stays in the same place and the surface marks change at random, so nothing actually rotates and a 360° viewer would only shimmer. Image generators do not rotate an object; they draw a new one each time.
+- **Decision:** demo sample sets are rendered from CC0 photogrammetry scans (Poly Haven) with `scripts/render_turntable.py` (Blender, headless). The object turns on a virtual turntable while camera and lights stay fixed, so patterns travel around the piece consistently, exactly like a real shoot. Locally this takes about 2.5 minutes and 1.4 GB of RAM per piece on an RTX 3050 (OptiX), 1024 px, 64 samples.
+- **Honest labeling:** these are not photos of an artisan's real piece. The sample gallery and the pre-processed example store say "demonstration photos rendered from 3D scanned models"; the "made from the artisan's real photos" badge is never shown on them. At least one real phone-photo set is kept as proof that the pipeline works on real photos.
+- **Credits:** models by the Poly Haven community (CC0, no attribution required; credited anyway). First piece: "Antique Ceramic Vase 01" by James Ray Cock.
+- Raw models and rendered sets stay out of git (`test-photos/`); only the script is versioned.

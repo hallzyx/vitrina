@@ -6,6 +6,8 @@ samconfig.toml
 node_modules/
 __pycache__/
 .pytest_cache/
+# Local demo photo sets, downloaded 3D models and Blender output (large, not source code)
+test-photos/
 .venv/
 venv/
 *.pem
