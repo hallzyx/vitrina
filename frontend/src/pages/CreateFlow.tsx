@@ -2,11 +2,13 @@ import { useEffect, useMemo, useState, type ChangeEvent } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { LuCamera, LuCheck, LuKeyRound, LuPartyPopper } from "react-icons/lu";
 import { CopyButton, RealBadge, Topbar } from "../components/Chrome";
+import { InviteGate } from "../components/InviteGate";
 import { PieceThumb } from "../components/PieceThumb";
 import { btn, card, eyebrow, label } from "../components/ui";
 import { Viewer360 } from "../components/Viewer360";
 import { EXAMPLE_STORE, VASE } from "../data/mock";
 import { useI18n, type TKey } from "../i18n";
+import { ApiRequestError, clearStoredCode, getStoredCode, verifyAccessCode } from "../lib/api";
 import { renderFrame } from "../lib/render";
 
 type Step = "capture" | "brand" | "processing" | "result" | "publish";
@@ -39,6 +41,25 @@ export function CreateFlow() {
   const addMode = params.get("add") === "1";
   const steps: Step[] = addMode ? ["capture", "processing", "result", "publish"] : ["capture", "brand", "processing", "result", "publish"];
 
+  // Creating a store needs the invite phrase; adding a product later uses the edit token instead.
+  const [access, setAccess] = useState<"checking" | "locked" | "open">(() =>
+    addMode ? "open" : getStoredCode() ? "checking" : "locked",
+  );
+  useEffect(() => {
+    if (access !== "checking") return;
+    let cancelled = false;
+    verifyAccessCode(getStoredCode() ?? "")
+      .then(() => !cancelled && setAccess("open"))
+      .catch((err) => {
+        if (cancelled) return;
+        if (err instanceof ApiRequestError && err.status === 401) clearStoredCode();
+        setAccess("locked");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [access]);
+
   const [step, setStep] = useState<Step>("capture");
   const [photos, setPhotos] = useState<string[]>([]);
   const [name, setName] = useState("");
@@ -62,6 +83,14 @@ export function CreateFlow() {
           aria-hidden="true"
         />
         <div className="w-full max-w-[460px] rounded-sheet border border-line bg-card px-5 pb-6 pt-5 shadow-lift sm:px-6">
+          {access === "locked" && <InviteGate onUnlocked={() => setAccess("open")} />}
+          {access === "checking" && (
+            <p className="py-10 text-center text-ink-soft" role="status">
+              {t("gate.checking")}
+            </p>
+          )}
+          {access === "open" && (
+          <>
           <nav className="mb-2 flex gap-1.5" aria-label={t("create.stepOf", { n: index + 1, total: steps.length })}>
             {steps.map((s, i) => (
               <span
@@ -114,6 +143,8 @@ export function CreateFlow() {
             <Publish published={published} onPublish={() => setPublished({ token: randomToken() })} onBack={back} />
           )}
           </div>
+          </>
+          )}
         </div>
       </main>
     </>
