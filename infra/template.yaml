@@ -1,6 +1,6 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Transform: AWS::Serverless-2016-10-31
-Description: Vitrina - base skeleton (S3 + CloudFront + GET /health)
+Description: Vitrina - storefront hosting, API, data and guardrails
 
 Parameters:
   Stage:
@@ -11,6 +11,29 @@ Parameters:
     Default: "false"
     AllowedValues: ["true", "false"]
     Description: When "true", CloudFront is disabled and the API throttles to zero. Data is kept.
+  AccessCodeParamName:
+    Type: String
+    Default: /vitrina/prod/access-code
+    Description: SSM SecureString holding the invite phrase. The phrase itself is never in this template.
+  ExampleStoreSlug:
+    Type: String
+    Default: example
+  MaxStoresPerDay:
+    Type: Number
+    Default: 3
+  MaxProductsPerDay:
+    Type: Number
+    Default: 3
+  MaxGlobalStoresPerDay:
+    Type: Number
+    Default: 20
+  MaxGlobalProductsPerDay:
+    Type: Number
+    Default: 30
+  MaxFailedAttempts:
+    Type: Number
+    Default: 10
+    Description: Wrong invite phrases allowed per IP per hour.
 
 Conditions:
   IsPaused: !Equals [!Ref Paused, "true"]
@@ -19,9 +42,134 @@ Globals:
   Function:
     # Required by the vitrina-agent IAM policy: roles may only be created with this boundary
     PermissionsBoundary: !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:policy/vitrina-boundary"
+    CodeUri: ../backend/src/
+    Runtime: python3.12
+    Architectures: [arm64]
+    MemorySize: 256
+    Timeout: 10
+    Environment:
+      Variables:
+        TABLE_STORES: !Ref StoresTable
+        TABLE_PRODUCTS: !Ref ProductsTable
+        TABLE_STATS: !Ref StatsTable
+        TABLE_LIMITS: !Ref LimitsTable
+        # Referenced by name, not with !Ref: RawBucket's CORS needs the CloudFront domain, and
+        # CloudFront depends on the API, which contains these functions (a !Ref here would be a cycle).
+        BUCKET_RAW: !Sub "${AWS::StackName}-raw-${AWS::AccountId}-${AWS::Region}"
+        BUCKET_PROCESSED: !Sub "${AWS::StackName}-processed-${AWS::AccountId}-${AWS::Region}"
+        ACCESS_CODE_PARAM_NAME: !Ref AccessCodeParamName
+        EXAMPLE_STORE_SLUG: !Ref ExampleStoreSlug
+        MAX_STORES_PER_DAY: !Ref MaxStoresPerDay
+        MAX_PRODUCTS_PER_DAY: !Ref MaxProductsPerDay
+        MAX_GLOBAL_STORES_PER_DAY: !Ref MaxGlobalStoresPerDay
+        MAX_GLOBAL_PRODUCTS_PER_DAY: !Ref MaxGlobalProductsPerDay
+        MAX_FAILED_ATTEMPTS: !Ref MaxFailedAttempts
+        MIN_PHOTOS: "6"
+        MAX_PHOTOS: "24"
+        MAX_PHOTO_MB: "8"
 
 Resources:
-  # --- Frontend: private bucket served through CloudFront (OAC) ---
+  # ---------------------------------------------------------------- Data
+  StoresTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub "${AWS::StackName}-stores"
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - { AttributeName: storeId, AttributeType: S }
+        - { AttributeName: slug, AttributeType: S }
+      KeySchema:
+        - { AttributeName: storeId, KeyType: HASH }
+      GlobalSecondaryIndexes:
+        - IndexName: slug-index
+          KeySchema:
+            - { AttributeName: slug, KeyType: HASH }
+          Projection: { ProjectionType: ALL }
+
+  ProductsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub "${AWS::StackName}-products"
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - { AttributeName: storeId, AttributeType: S }
+        - { AttributeName: productId, AttributeType: S }
+      KeySchema:
+        - { AttributeName: storeId, KeyType: HASH }
+        - { AttributeName: productId, KeyType: RANGE }
+
+  StatsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub "${AWS::StackName}-stats"
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - { AttributeName: storeId, AttributeType: S }
+        - { AttributeName: sk, AttributeType: S }
+      KeySchema:
+        - { AttributeName: storeId, KeyType: HASH }
+        - { AttributeName: sk, KeyType: RANGE }
+
+  LimitsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub "${AWS::StackName}-limits"
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - { AttributeName: visitorKey, AttributeType: S }
+      KeySchema:
+        - { AttributeName: visitorKey, KeyType: HASH }
+      TimeToLiveSpecification:
+        AttributeName: expiresAt
+        Enabled: true
+
+  # Original photos: private, uploaded with presigned POST forms (size- and type-constrained).
+  RawBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "${AWS::StackName}-raw-${AWS::AccountId}-${AWS::Region}"
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      CorsConfiguration:
+        CorsRules:
+          - AllowedMethods: [POST]
+            AllowedOrigins: [!Sub "https://${Distribution.DomainName}"]
+            AllowedHeaders: ["*"]
+            MaxAge: 3000
+      LifecycleConfiguration:
+        Rules:
+          - Id: expire-raw-photos
+            Status: Enabled
+            Prefix: raw/
+            ExpirationInDays: 30
+          - Id: abort-incomplete-uploads
+            Status: Enabled
+            AbortIncompleteMultipartUpload:
+              DaysAfterInitiation: 1
+
+  # Processed frames and GLB models, served to buyers through CloudFront (/media/*).
+  ProcessedBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "${AWS::StackName}-processed-${AWS::AccountId}-${AWS::Region}"
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+
+  # ---------------------------------------------------------------- Frontend + CDN
   FrontendBucket:
     Type: AWS::S3::Bucket
     Properties:
@@ -35,14 +183,59 @@ Resources:
           - ServerSideEncryptionByDefault:
               SSEAlgorithm: AES256
 
-  FrontendOAC:
+  OriginAccessControl:
     Type: AWS::CloudFront::OriginAccessControl
     Properties:
       OriginAccessControlConfig:
-        Name: !Sub "${AWS::StackName}-frontend-oac"
+        Name: !Sub "${AWS::StackName}-s3-oac"
         OriginAccessControlOriginType: s3
         SigningBehavior: always
         SigningProtocol: sigv4
+
+  # SPA fallback on the site behavior only. (Distribution-wide custom error responses would also
+  # rewrite the API's own 403/404 answers into index.html.)
+  SpaRewriteFunction:
+    Type: AWS::CloudFront::Function
+    Properties:
+      Name: !Sub "${AWS::StackName}-spa-rewrite"
+      AutoPublish: true
+      FunctionConfig:
+        Comment: Serve index.html for client-side routes (URIs without a file extension)
+        Runtime: cloudfront-js-2.0
+      FunctionCode: |
+        function handler(event) {
+          var request = event.request;
+          if (request.uri.indexOf('.') === -1) {
+            request.uri = '/index.html';
+          }
+          return request;
+        }
+
+  ApiCachePolicy:
+    Type: AWS::CloudFront::CachePolicy
+    Properties:
+      CachePolicyConfig:
+        Name: !Sub "${AWS::StackName}-api-no-cache"
+        MinTTL: 0
+        DefaultTTL: 0
+        MaxTTL: 0
+        ParametersInCacheKeyAndForwardedToOrigin:
+          EnableAcceptEncodingGzip: false
+          EnableAcceptEncodingBrotli: false
+          HeadersConfig: { HeaderBehavior: none }
+          CookiesConfig: { CookieBehavior: none }
+          QueryStringsConfig: { QueryStringBehavior: none }
+
+  ApiOriginRequestPolicy:
+    Type: AWS::CloudFront::OriginRequestPolicy
+    Properties:
+      OriginRequestPolicyConfig:
+        Name: !Sub "${AWS::StackName}-api-origin"
+        HeadersConfig:
+          HeaderBehavior: whitelist
+          Headers: [Accept, Content-Type, X-Edit-Token, X-Access-Code, CloudFront-Viewer-Address]
+        CookiesConfig: { CookieBehavior: none }
+        QueryStringsConfig: { QueryStringBehavior: all }
 
   Distribution:
     Type: AWS::CloudFront::Distribution
@@ -55,23 +248,43 @@ Resources:
         Origins:
           - Id: frontend
             DomainName: !GetAtt FrontendBucket.RegionalDomainName
-            OriginAccessControlId: !GetAtt FrontendOAC.Id
+            OriginAccessControlId: !GetAtt OriginAccessControl.Id
             S3OriginConfig:
               OriginAccessIdentity: ""
+          - Id: processed
+            DomainName: !GetAtt ProcessedBucket.RegionalDomainName
+            OriginAccessControlId: !GetAtt OriginAccessControl.Id
+            S3OriginConfig:
+              OriginAccessIdentity: ""
+          - Id: api
+            DomainName: !Sub "${HttpApi}.execute-api.${AWS::Region}.amazonaws.com"
+            OriginPath: !Sub "/${Stage}"
+            CustomOriginConfig:
+              OriginProtocolPolicy: https-only
+              OriginSSLProtocols: [TLSv1.2]
         DefaultCacheBehavior:
           TargetOriginId: frontend
           ViewerProtocolPolicy: redirect-to-https
           Compress: true
           # Managed-CachingOptimized
           CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6
-        # SPA fallback for client-side routes (/t/:slug, /editar/:token, ...)
-        CustomErrorResponses:
-          - ErrorCode: 403
-            ResponseCode: 200
-            ResponsePagePath: /index.html
-          - ErrorCode: 404
-            ResponseCode: 200
-            ResponsePagePath: /index.html
+          FunctionAssociations:
+            - EventType: viewer-request
+              FunctionARN: !GetAtt SpaRewriteFunction.FunctionMetadata.FunctionARN
+        CacheBehaviors:
+          - PathPattern: /media/*
+            TargetOriginId: processed
+            ViewerProtocolPolicy: redirect-to-https
+            Compress: true
+            AllowedMethods: [GET, HEAD]
+            CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6
+          - PathPattern: /api/*
+            TargetOriginId: api
+            ViewerProtocolPolicy: https-only
+            Compress: true
+            AllowedMethods: [GET, HEAD, OPTIONS, PUT, POST, PATCH, DELETE]
+            CachePolicyId: !Ref ApiCachePolicy
+            OriginRequestPolicyId: !Ref ApiOriginRequestPolicy
 
   FrontendBucketPolicy:
     Type: AWS::S3::BucketPolicy
@@ -90,7 +303,24 @@ Resources:
               StringEquals:
                 AWS:SourceArn: !Sub "arn:${AWS::Partition}:cloudfront::${AWS::AccountId}:distribution/${Distribution}"
 
-  # --- API: HTTP API + Lambda ---
+  ProcessedBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref ProcessedBucket
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: AllowCloudFrontOACMedia
+            Effect: Allow
+            Principal:
+              Service: cloudfront.amazonaws.com
+            Action: s3:GetObject
+            Resource: !Sub "${ProcessedBucket.Arn}/media/*"
+            Condition:
+              StringEquals:
+                AWS:SourceArn: !Sub "arn:${AWS::Partition}:cloudfront::${AWS::AccountId}:distribution/${Distribution}"
+
+  # ---------------------------------------------------------------- API
   HttpApi:
     Type: AWS::Serverless::HttpApi
     Properties:
@@ -102,19 +332,126 @@ Resources:
   HealthFunction:
     Type: AWS::Serverless::Function
     Properties:
-      CodeUri: ../backend/health/
-      Handler: app.handler
-      Runtime: python3.12
-      Architectures: [arm64]
+      Handler: handlers.health.handler
       MemorySize: 128
       Timeout: 5
       Events:
         Health:
           Type: HttpApi
-          Properties:
-            ApiId: !Ref HttpApi
-            Path: /health
-            Method: GET
+          Properties: { ApiId: !Ref HttpApi, Path: /api/health, Method: GET }
+
+  # POST /api/access/verify: checks the invite phrase (SSM) and counts failed attempts per IP.
+  AccessFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: handlers.access.handler
+      Policies:
+        - Version: "2012-10-17"
+          Statement:
+            - Effect: Allow
+              Action: ssm:GetParameter
+              Resource: !Sub "arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter${AccessCodeParamName}"
+            - Effect: Allow
+              Action: kms:Decrypt
+              Resource: !Sub "arn:${AWS::Partition}:kms:${AWS::Region}:${AWS::AccountId}:key/*"
+              Condition:
+                StringEquals:
+                  kms:ViaService: !Sub "ssm.${AWS::Region}.amazonaws.com"
+            - Effect: Allow
+              Action: [dynamodb:GetItem, dynamodb:UpdateItem]
+              Resource: !GetAtt LimitsTable.Arn
+      Events:
+        Verify:
+          Type: HttpApi
+          Properties: { ApiId: !Ref HttpApi, Path: /api/access/verify, Method: POST }
+
+  # POST /api/stores (invite phrase) and POST /api/stores/{storeId}/publish (edit token).
+  StoresFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: handlers.stores.handler
+      Policies:
+        - Version: "2012-10-17"
+          Statement:
+            - Effect: Allow
+              Action: ssm:GetParameter
+              Resource: !Sub "arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter${AccessCodeParamName}"
+            - Effect: Allow
+              Action: kms:Decrypt
+              Resource: !Sub "arn:${AWS::Partition}:kms:${AWS::Region}:${AWS::AccountId}:key/*"
+              Condition:
+                StringEquals:
+                  kms:ViaService: !Sub "ssm.${AWS::Region}.amazonaws.com"
+            - Effect: Allow
+              Action: [dynamodb:GetItem, dynamodb:UpdateItem]
+              Resource: !GetAtt LimitsTable.Arn
+            - Effect: Allow
+              Action: [dynamodb:GetItem, dynamodb:PutItem, dynamodb:UpdateItem]
+              Resource: !GetAtt StoresTable.Arn
+            - Effect: Allow
+              Action: dynamodb:Query
+              Resource: !Sub "${StoresTable.Arn}/index/slug-index"
+      Events:
+        CreateStore:
+          Type: HttpApi
+          Properties: { ApiId: !Ref HttpApi, Path: /api/stores, Method: POST }
+        PublishStore:
+          Type: HttpApi
+          Properties: { ApiId: !Ref HttpApi, Path: "/api/stores/{storeId}/publish", Method: POST }
+
+  # POST /api/stores/{storeId}/products (edit token): creates the product and presigned upload forms.
+  ProductsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: handlers.products.handler
+      Policies:
+        - Version: "2012-10-17"
+          Statement:
+            - Effect: Allow
+              Action: dynamodb:GetItem
+              Resource: !GetAtt StoresTable.Arn
+            - Effect: Allow
+              Action: dynamodb:PutItem
+              Resource: !GetAtt ProductsTable.Arn
+            - Effect: Allow
+              Action: dynamodb:UpdateItem
+              Resource: !GetAtt LimitsTable.Arn
+            - Effect: Allow
+              Action: s3:PutObject
+              # Built from the bucket name (see the note in Globals) to avoid a dependency cycle.
+              Resource: !Sub "arn:${AWS::Partition}:s3:::${AWS::StackName}-raw-${AWS::AccountId}-${AWS::Region}/raw/*"
+      Events:
+        CreateProduct:
+          Type: HttpApi
+          Properties: { ApiId: !Ref HttpApi, Path: "/api/stores/{storeId}/products", Method: POST }
+
+  # Public, code-free endpoints: published store, example store, view/click events.
+  PublicFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: handlers.public.handler
+      Policies:
+        - Version: "2012-10-17"
+          Statement:
+            - Effect: Allow
+              Action: dynamodb:Query
+              Resource: !Sub "${StoresTable.Arn}/index/slug-index"
+            - Effect: Allow
+              Action: dynamodb:Query
+              Resource: !GetAtt ProductsTable.Arn
+            - Effect: Allow
+              Action: dynamodb:UpdateItem
+              Resource: [!GetAtt StatsTable.Arn, !GetAtt LimitsTable.Arn]
+      Events:
+        GetStore:
+          Type: HttpApi
+          Properties: { ApiId: !Ref HttpApi, Path: "/api/public/stores/{slug}", Method: GET }
+        GetExample:
+          Type: HttpApi
+          Properties: { ApiId: !Ref HttpApi, Path: /api/public/example, Method: GET }
+        RecordEvent:
+          Type: HttpApi
+          Properties: { ApiId: !Ref HttpApi, Path: /api/public/events, Method: POST }
 
 Outputs:
   SiteUrl:
@@ -123,5 +460,9 @@ Outputs:
     Value: !Sub "https://${HttpApi}.execute-api.${AWS::Region}.amazonaws.com/${Stage}"
   FrontendBucketName:
     Value: !Ref FrontendBucket
+  RawBucketName:
+    Value: !Ref RawBucket
+  ProcessedBucketName:
+    Value: !Ref ProcessedBucket
   DistributionId:
     Value: !Ref Distribution
