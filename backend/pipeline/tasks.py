@@ -129,8 +129,14 @@ def process_photo(event: dict) -> dict:
 
         # Fidelity: does the cutout still look like the same piece as the photo it came from? If the
         # embedding model stays throttled the frame is kept but NOT scored, and the product says so.
+        # Only every Nth frame is scored (FIDELITY_SAMPLE_EVERY, default 2): Titan on-demand allows 20
+        # requests per minute and cannot be raised, so scoring all frames would run into the limit.
+        # Unscored frames are reported through `fidelityChecked`, never passed off as checked.
         crop = imaging.expand_box(box, image.size)
+        step = max(1, env_int("FIDELITY_SAMPLE_EVERY", 2))
         try:
+            if (index - 1) % step:
+                raise ai.EmbeddingUnavailable("not_sampled")
             original = ai.titan_embed(imaging.to_jpeg(image.crop(crop), 512))
             processed = ai.titan_embed(imaging.to_jpeg(imaging.on_gray(rgba.crop(crop)), 512))
             score = round(imaging.cosine(original, processed), 4)

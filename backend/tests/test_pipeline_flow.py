@@ -154,12 +154,23 @@ def test_a_throttled_embedding_keeps_the_frame_but_reports_it_as_unchecked(stubs
         return real(jpeg)
 
     monkeypatch.setattr(ai, "titan_embed", flaky)
+    monkeypatch.setenv("FIDELITY_SAMPLE_EVERY", "1")  # score every frame so the counts below are exact
     seed(10)
     _, aligned, checked, _ = run_pipeline()
     item = product()
     assert item["status"] == "ready_360" and len(item["frameKeys"]) == 10
     assert checked["checked"] == 8 and item["fidelityChecked"] == 8
     assert 0.8 <= float(item["fidelityScore"]) <= 1  # the score covers only the checked frames
+
+
+def test_only_every_second_frame_is_scored_by_default_and_the_rest_is_reported_unchecked(stubs):
+    """Titan allows 20 requests per minute, so half the frames are scored (two calls each)."""
+    seed(12)
+    _, aligned, checked, _ = run_pipeline()
+    item = product()
+    assert item["status"] == "ready_360" and len(item["frameKeys"]) == 12
+    assert checked["checked"] == 6 and item["fidelityChecked"] == 6
+    assert sorted(f["index"] for f in aligned["frames"] if f["fidelity"] is not None) == [1, 3, 5, 7, 9, 11]
 
 
 def test_with_nothing_scored_the_product_is_ready_without_a_score(stubs, monkeypatch):
