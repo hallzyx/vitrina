@@ -1,14 +1,13 @@
 import { motion, useReducedMotion, useScroll, useTransform } from "motion/react";
 import { Fragment, lazy, Suspense, useCallback, useRef, useState } from "react";
 import { useMediaQuery } from "./useMediaQuery";
-import { LuArrowDown, LuArrowRight, LuStore } from "react-icons/lu";
+import { LuArrowDown, LuArrowRight, LuShieldCheck, LuStore } from "react-icons/lu";
 import { Link } from "react-router-dom";
-import { RealBadge } from "../components/Chrome";
 import { ErrorBoundary } from "../components/ErrorBoundary";
 import { PieceThumb } from "../components/PieceThumb";
 import { btn, eyebrow } from "../components/ui";
 import { Viewer360 } from "../components/Viewer360";
-import { BASKET, BOWL, VASE } from "../data/mock";
+import { BASKET, BOWL, VASE } from "./illustration";
 import { useI18n, type TKey } from "../i18n";
 import type { Shape } from "../lib/render";
 import { EASE } from "./motion";
@@ -244,9 +243,9 @@ function HeroCopy() {
           {t("nav.example")}
         </Link>
       </div>
-      <div className="mt-6 [&>span]:border-olive/50 [&>span]:bg-olive/20 [&>span]:text-[#dfe8c9]">
-        <RealBadge />
-      </div>
+      <p className="mt-6 inline-flex items-center gap-1.5 rounded-full border border-olive/50 bg-olive/20 px-3 py-1 text-[0.8rem] font-semibold text-[#dfe8c9]">
+        <LuShieldCheck aria-hidden="true" className="size-3.5 shrink-0" /> {t("landing.hero.promise")}
+      </p>
     </>
   );
 }

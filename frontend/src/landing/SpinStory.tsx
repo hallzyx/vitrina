@@ -13,7 +13,7 @@ import { LuCamera, LuMessageCircle, LuScanLine } from "react-icons/lu";
 import { PieceThumb } from "../components/PieceThumb";
 import { eyebrow } from "../components/ui";
 import { Viewer360 } from "../components/Viewer360";
-import { VASE } from "../data/mock";
+import { VASE } from "./illustration";
 import { useI18n, type TKey } from "../i18n";
 import { EASE, Reveal } from "./motion";
 

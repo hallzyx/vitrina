@@ -33,7 +33,7 @@ import {
   WebGLRenderer,
 } from "three";
 import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
-import { BASKET, BOWL, VASE } from "../data/mock";
+import { BASKET, BOWL, VASE } from "./illustration";
 import { GEOMETRY, patternMix, radius, type PieceSpec, type Shape } from "../lib/render";
 
 const SPECS: Record<Shape, PieceSpec> = { vase: VASE, bowl: BOWL, basket: BASKET };

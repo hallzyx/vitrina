@@ -4,6 +4,7 @@ import {
   LuArrowRight,
   LuArrowUpRight,
   LuBan,
+  LuBox,
   LuCheck,
   LuCheckCheck,
   LuKeyRound,
@@ -18,9 +19,11 @@ import { Link } from "react-router-dom";
 import { LangToggle, LogoMark } from "../components/Chrome";
 import { PieceThumb } from "../components/PieceThumb";
 import { btn, eyebrow } from "../components/ui";
-import { EXAMPLE_STORE, VASE } from "../data/mock";
 import { useI18n, type TKey } from "../i18n";
+import { getExampleStore, type PublicStore } from "../lib/api";
+import { hasPrice, isReady, productText, thumbOf } from "../lib/product";
 import type { PieceSpec } from "../lib/render";
+import { ILLUSTRATION, VASE } from "./illustration";
 import { EASE, Reveal } from "./motion";
 
 /* ───────────── Craft ticker ───────────── */
@@ -198,8 +201,8 @@ export function Fidelity() {
 
 function WhatsAppCard() {
   const { t, l, money } = useI18n();
-  const product = EXAMPLE_STORE.products[0];
-  const message = t("product.orderMsg", { name: l(product.name), price: money(product.price, EXAMPLE_STORE.currency) });
+  const product = ILLUSTRATION.order;
+  const message = t("product.orderMsg", { name: l(product.name), price: money(product.price, ILLUSTRATION.currency) });
   return (
     <div className="group relative flex h-full flex-col overflow-hidden rounded-sheet bg-[#0f3d25] p-6 text-paper sm:p-8">
       <div className="pointer-events-none absolute -right-24 -top-24 size-72 rounded-full bg-[radial-gradient(circle,rgb(74_222_128/0.25),transparent_70%)]" aria-hidden="true" />
@@ -210,9 +213,9 @@ function WhatsAppCard() {
       {/* Phone chat mock with the real, localized order message. */}
       <div className="mt-8 flex min-h-72 flex-1 flex-col rounded-t-[1.6rem] border-x border-t border-white/15 bg-[#0b2e1c] p-4 shadow-lift transition-transform duration-500 ease-out-soft group-hover:-translate-y-1.5">
         <div className="mb-4 flex items-center gap-3 border-b border-white/10 pb-3">
-          <span className="grid size-9 place-items-center rounded-full bg-terracotta font-display text-sm font-semibold text-white">CA</span>
+          <span className="grid size-9 place-items-center rounded-full bg-terracotta font-display text-sm font-semibold text-white">{ILLUSTRATION.initials}</span>
           <div className="text-sm">
-            <p className="font-semibold">{EXAMPLE_STORE.name}</p>
+            <p className="font-semibold">{ILLUSTRATION.storeName}</p>
             <p className="text-xs text-[#9fd8b0]">{t("landing.features.wa.online")}</p>
           </div>
         </div>
@@ -246,7 +249,7 @@ function BilingualCard() {
   const { t, lang } = useI18n();
   const reduced = useReducedMotion();
   const [shown, setShown] = useState<"en" | "es">(lang === "es" ? "en" : "es");
-  const product = EXAMPLE_STORE.products[1];
+  const product = ILLUSTRATION.listing;
 
   useEffect(() => {
     if (reduced) return;
@@ -325,7 +328,7 @@ function PaletteCard() {
         <p className="mt-2 text-ink-soft">{t("landing.features.brand.body")}</p>
       </div>
       <div className="flex" aria-hidden="true">
-        {EXAMPLE_STORE.colors.map((c, i) => (
+        {ILLUSTRATION.colors.map((c, i) => (
           <span
             key={c}
             className="-ml-2 size-12 rounded-full border-4 border-card shadow-card transition-transform duration-300 ease-out-soft first:ml-0 group-hover:translate-x-[calc(var(--i)*10px)]"
@@ -382,17 +385,103 @@ function Counter({ to, active }: { to: number; active: boolean }) {
   return <>{n}</>;
 }
 
+/** The real example store when the API answers; static illustrations (labeled as such) when it does not. */
+function useExampleStore(): PublicStore | null {
+  const [store, setStore] = useState<PublicStore | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    getExampleStore()
+      .then((data) => {
+        if (!cancelled) setStore(data);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+  return store;
+}
+
+const PROOF_CARD =
+  "group block overflow-hidden rounded-sheet border border-line bg-card no-underline shadow-card transition-[transform,box-shadow] duration-300 ease-out-soft hover:-translate-y-1.5 hover:shadow-lift";
+
+function ExampleCard({ store, product }: { store: PublicStore; product: PublicStore["products"][number] }) {
+  const { t, lang, money } = useI18n();
+  const text = productText(product, lang);
+  const thumb = thumbOf(product);
+  return (
+    <Link to={`/s/${store.slug}/${product.id}`} className={PROOF_CARD}>
+      <div className="relative aspect-square bg-[radial-gradient(circle_at_50%_38%,#fff,#efe4d4)] p-4">
+        {thumb && (
+          <img
+            src={thumb}
+            alt=""
+            loading="lazy"
+            decoding="async"
+            className="block size-full object-contain transition-transform duration-700 ease-out-soft group-hover:scale-105"
+          />
+        )}
+        <span className="absolute left-3 top-3 inline-flex items-center gap-1 rounded-full bg-card/90 px-2.5 py-0.5 text-[0.7rem] font-bold uppercase tracking-wider text-[#6b4a07]">
+          <LuBox aria-hidden="true" className="size-3" /> {t("badge.demoShort")}
+        </span>
+      </div>
+      <div className="flex items-center justify-between gap-3 p-4">
+        <div className="min-w-0">
+          <p className="truncate font-display text-lg font-medium text-ink" lang={text.lang}>
+            {text.name || t("product.untitled")}
+          </p>
+          {hasPrice(product.price) && <p className="text-sm font-semibold text-terracotta-deep">{money(product.price, store.currency)}</p>}
+        </div>
+        <span className="grid size-10 shrink-0 place-items-center rounded-full bg-paper-2 text-ink transition-colors group-hover:bg-ink group-hover:text-paper">
+          <LuArrowUpRight aria-hidden="true" className="size-5" />
+        </span>
+      </div>
+    </Link>
+  );
+}
+
+function IllustrationCard({ piece, name }: { piece: PieceSpec; name: { en: string; es: string } }) {
+  const { t, l } = useI18n();
+  return (
+    <Link to="/s/example" className={PROOF_CARD}>
+      <div className="relative bg-[radial-gradient(circle_at_50%_38%,#fff,#efe4d4)] p-4">
+        <div className="transition-transform duration-700 ease-out-soft group-hover:rotate-[4deg] group-hover:scale-105">
+          <PieceThumb piece={piece} size={320} />
+        </div>
+        <span className="absolute left-3 top-3 rounded-full bg-card/90 px-2.5 py-0.5 text-[0.7rem] font-bold uppercase tracking-wider text-ink-soft">
+          {t("landing.proof.illustration")}
+        </span>
+      </div>
+      <div className="flex items-center justify-between gap-3 p-4">
+        <p className="font-display text-lg font-medium text-ink">{l(name)}</p>
+        <span className="grid size-10 place-items-center rounded-full bg-paper-2 text-ink transition-colors group-hover:bg-ink group-hover:text-paper">
+          <LuArrowUpRight aria-hidden="true" className="size-5" />
+        </span>
+      </div>
+    </Link>
+  );
+}
+
 export function DemoProof() {
-  const { t, l, money } = useI18n();
+  const { t } = useI18n();
   const ref = useRef<HTMLDivElement>(null);
   const inView = useInView(ref, { once: true, amount: 0.4 });
-  const store = EXAMPLE_STORE;
-  const facts: { value: number; label: TKey }[] = [
-    { value: store.products.length, label: "landing.proof.pieces" },
-    { value: store.products[0].frames, label: "landing.proof.frames" },
-    { value: 0, label: "landing.proof.accounts" },
-    { value: 2, label: "landing.proof.langs" },
-  ];
+  const example = useExampleStore();
+  const products = (example?.products ?? []).filter((p) => isReady(p) && p.frames.length > 0);
+  const live = !!example && products.length > 0;
+  const facts: { value: number; label: TKey }[] = live
+    ? [
+        { value: products.length, label: "landing.proof.pieces" },
+        { value: Math.max(...products.map((p) => p.frames.length)), label: "landing.proof.frames" },
+        { value: 0, label: "landing.proof.accounts" },
+        { value: 2, label: "landing.proof.langs" },
+      ]
+    : [
+        { value: 12, label: "landing.proof.photos" },
+        { value: 7, label: "landing.proof.steps" },
+        { value: 0, label: "landing.proof.accounts" },
+        { value: 2, label: "landing.proof.langs" },
+      ];
 
   return (
     <section className="bg-paper-2 py-24 lg:py-32">
@@ -411,33 +500,22 @@ export function DemoProof() {
 
         {/* Swipeable row on phones, three columns from `sm`. */}
         <div className="-mx-4 mt-12 flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 pb-2 sm:mx-0 sm:grid sm:grid-cols-3 sm:gap-4 sm:overflow-visible sm:px-0 sm:pb-0">
-          {store.products.map((p, i) => (
-            <Reveal key={p.id} delay={i * 0.08} className="w-[72%] shrink-0 snap-start sm:w-auto">
-              <Link
-                to={`/s/${store.slug}/${p.id}`}
-                className="group block overflow-hidden rounded-sheet border border-line bg-card no-underline shadow-card transition-[transform,box-shadow] duration-300 ease-out-soft hover:-translate-y-1.5 hover:shadow-lift"
-              >
-                <div className="relative bg-[radial-gradient(circle_at_50%_38%,#fff,#efe4d4)] p-4">
-                  <div className="transition-transform duration-700 ease-out-soft group-hover:rotate-[4deg] group-hover:scale-105">
-                    <PieceThumb piece={p.piece} size={320} />
-                  </div>
-                  <span className="absolute left-3 top-3 rounded-full bg-card/90 px-2.5 py-0.5 text-[0.7rem] font-bold uppercase tracking-wider text-ink-soft">
-                    {t("landing.proof.sample")}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between gap-3 p-4">
-                  <div>
-                    <p className="font-display text-lg font-medium text-ink">{l(p.name)}</p>
-                    <p className="text-sm font-semibold text-terracotta-deep">{money(p.price, store.currency)}</p>
-                  </div>
-                  <span className="grid size-10 place-items-center rounded-full bg-paper-2 text-ink transition-colors group-hover:bg-ink group-hover:text-paper">
-                    <LuArrowUpRight aria-hidden="true" className="size-5" />
-                  </span>
-                </div>
-              </Link>
-            </Reveal>
-          ))}
+          {live && example
+            ? products.slice(0, 3).map((p, i) => (
+                <Reveal key={p.id} delay={i * 0.08} className="w-[72%] shrink-0 snap-start sm:w-auto">
+                  <ExampleCard store={example} product={p} />
+                </Reveal>
+              ))
+            : ILLUSTRATION.pieces.map((p, i) => (
+                <Reveal key={p.piece.id} delay={i * 0.08} className="w-[72%] shrink-0 snap-start sm:w-auto">
+                  <IllustrationCard piece={p.piece} name={p.name} />
+                </Reveal>
+              ))}
         </div>
+        <p className="mt-4 flex items-start gap-2 text-sm text-ink-soft">
+          <LuBox aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-[#6b4a07]" />
+          {live ? t("landing.proof.honest") : t("landing.proof.offline")}
+        </p>
 
         <div ref={ref} className="mt-10 grid grid-cols-2 gap-px overflow-hidden rounded-sheet border border-line bg-line sm:grid-cols-4">
           {facts.map((f) => (
