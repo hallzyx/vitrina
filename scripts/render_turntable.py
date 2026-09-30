@@ -29,6 +29,7 @@ def parse_args():
     p.add_argument("--samples", type=int, default=64)
     p.add_argument("--limit", type=int, default=0, help="render only the first N frames (0 = all)")
     p.add_argument("--elevation", type=float, default=24.0, help="camera angle above the horizon, degrees")
+    p.add_argument("--exposure", type=float, default=0.0, help="exposure compensation in EV (negative for white pieces)")
     return p.parse_args(argv)
 
 
@@ -87,15 +88,16 @@ def main():
     if not meshes:
         raise SystemExit("No mesh found in the model")
 
-    # Normalize: height 1, base on z = 0, centered on the origin, all parts under one turntable empty.
+    # Normalize: largest extent = 1 (height or horizontal diagonal, since the piece turns), base on
+    # z = 0, centered on the origin, all parts under one turntable empty.
     lo, hi = world_bounds(meshes)
-    height = hi.z - lo.z
+    extent = max(hi.z - lo.z, math.hypot(hi.x - lo.x, hi.y - lo.y))
     turntable = bpy.data.objects.new("Turntable", None)
     scene.collection.objects.link(turntable)
     for o in meshes:
         o.parent = turntable
         o.matrix_parent_inverse = turntable.matrix_world.inverted()
-    scale = 1.0 / height
+    scale = 1.0 / extent
     turntable.scale = (scale, scale, scale)
     bpy.context.view_layer.update()
     lo, hi = world_bounds(meshes)
@@ -126,8 +128,9 @@ def main():
     bg.inputs["Strength"].default_value = 1.0
     scene.world = world
 
+    mid_height = hi.z / 2
     center = bpy.data.objects.new("Look", None)
-    center.location = (0, 0, 0.5)
+    center.location = (0, 0, mid_height)
     scene.collection.objects.link(center)
     add_area_light("Key", (-1.8, -2.2, 2.2), 170, 2.0, center)
     add_area_light("Fill", (2.4, -1.6, 1.2), 45, 3.0, center)
@@ -139,9 +142,11 @@ def main():
     scene.collection.objects.link(cam)
     scene.camera = cam
     fov = 2 * math.atan(cam_data.sensor_width / (2 * cam_data.lens))
-    distance = (1.0 * 1.25) / (2 * math.tan(fov / 2)) + 0.5
+    # The piece (largest extent 1) should fill most of the frame: more pixels on the object means
+    # cleaner masks later, when the background is removed.
+    distance = (1.0 * 1.2) / (2 * math.tan(fov / 2))
     el = math.radians(args.elevation)
-    cam.location = (0, -distance * math.cos(el), 0.5 + distance * math.sin(el))
+    cam.location = (0, -distance * math.cos(el), mid_height + distance * math.sin(el))
     track = cam.constraints.new("TRACK_TO")
     track.target = center
     track.track_axis = "TRACK_NEGATIVE_Z"
@@ -154,6 +159,7 @@ def main():
     scene.render.image_settings.file_format = "JPEG"
     scene.render.image_settings.quality = 92
     scene.view_settings.view_transform = "Standard"
+    scene.view_settings.exposure = args.exposure
     enable_gpu(scene)
 
     total = args.limit or args.frames
