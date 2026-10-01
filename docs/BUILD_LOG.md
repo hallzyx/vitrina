@@ -145,3 +145,8 @@ Format: `date-time (America/Lima) · what was requested · what the agent did ·
 - **Requested by the owner:** the title typed at upload must stay as written.
 - **Done (agent):** `apply_artisan_name` in the listing step; prompt wording adjusted; 105 tests pass (2 new). Change set reviewed (PipelineFunction and PipelineStateMachine only), `UPDATE_COMPLETE`. The two existing products of the owner's store got their typed names as titles through a DynamoDB update.
 - **Tools:** AWS SAM CLI, AWS CLI (`cloudformation`, `dynamodb`), pytest.
+
+## 2026-10-01 · Static pages for readers without JavaScript, MCP check and CloudTrail evidence
+- **Requested by the owner:** make the documentation and the site pass the hackathon filters (read by an AI scorer and by judges) and gather proof of the agent connection.
+- **Done (agent):** `index.html` metadata and `<noscript>` content, `/about.html`, `/llms.txt`, `/robots.txt` published to the frontend bucket with CloudFront invalidations (all return 200 on production); a read-only script run through the AWS MCP Server (`sts:GetCallerIdentity`, `cloudformation:DescribeStacks`) confirmed the connection as `vitrina-agent`; `docs/evidence/CLOUDTRAIL_SUMMARY.md` written from `cloudtrail:LookupEvents`. New `docs/COMPLIANCE.md` and `docs/PRODUCT.md`.
+- **Tools:** AWS MCP Server (`aws___run_script`), AWS CLI (`s3`, `cloudfront`, `cloudtrail`, `cloudformation`).
