@@ -133,3 +133,10 @@ Format: `date-time (America/Lima) · what was requested · what the agent did ·
 - **Live verification:** the same 12 real phone photos re-run on production: 12 of 12 frames kept (10 before), height spread 1.015 (1.091 before), `fidelityScore` 0.9011 over 6 scored frames. The test store was deleted afterwards.
 - **Not changed:** vertical wobble of the floor line in steady mode (about 2%) remains.
 - **Tools:** AWS SAM CLI, AWS CLI (`cloudformation`, `stepfunctions`, `dynamodb`, `s3`), Bedrock Titan (experiments), pytest.
+
+## 2026-10-01 · Reprocessed the owner's two products with the calibrated pipeline
+- **Requested by the owner:** update the products of their store (`arroz-market-3c3a`) so they benefit from the calibrated fidelity margin and the size normalization.
+- **Done (agent):** for each product, created a new product item that reuses the same raw photos (new ULID, because frames are cached for a year under their keys), started the Step Functions execution directly, waited for `ready_360`, restored the owner's copy (names and descriptions) and price, moved the per-product view and click counters, verified the public store endpoint, then deleted the old product item, its stats row and its media files. Raw photos were kept. Backups of the old items were kept outside the repository.
+- **Result:** the first product now has 12 frames (it had 10); the second kept its 9 frames with evened-out sizes. Run times 40 to 51 s.
+- **Side effect:** product URLs changed (`/s/<slug>/<productId>`); the store link and the edit link did not.
+- **Tools:** AWS CLI (`dynamodb`, `stepfunctions`, `s3api`), curl.
