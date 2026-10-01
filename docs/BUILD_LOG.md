@@ -121,3 +121,8 @@ Format: `date-time (America/Lima) · what was requested · what the agent did ·
 - **Fix:** the function also rewrites any `/edit/*` URI. Change set reviewed (in-place modifications of the function, the distribution and the raw bucket, no replacements), `UPDATE_COMPLETE`. Checked on production: `/edit/<token with dot>`, `/edit/x`, `/s/example` and `/create` return the app (200); a missing asset still returns 403.
 - **Lesson:** direct-load URL tests for every client route are now part of the deploy checks.
 - **Tools:** AWS SAM CLI, AWS CLI (`cloudformation`), curl.
+
+## 2026-09-30 · Neutral demo wording and structured submission docs
+- **Requested by the owner:** remove the "renders of sample scans" wording from the app (it also accepts real photos), push, and add structured documentation since an AI is likely the first reviewer.
+- **Done (agent):** neutral EN/ES strings for the demo badge, footer, sample gallery, dashboard note and landing proof; new `docs/SUBMISSION.md` (summary, try-it table, AWS services, coding-agent evidence, criteria, guardrails, limitations, repo map); README refreshed (flow, AI services, status; stale 3D and SageMaker content removed); ARCHITECTURE gained the real-time processing view; CREDITS and DECISIONS updated. Frontend rebuilt and published, CloudFront invalidated.
+- **Tools:** Vite, AWS CLI (`s3`, `cloudfront`, `cloudformation`).

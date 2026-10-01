@@ -84,3 +84,6 @@
 - **Decision:** the optional 3D branch (SageMaker, `ENABLE_3D`) is not built. `PLAN.md` and `CLAUDE.md` define it as a spike that is cut without regret if it does not fit, and cutting it is the first item of the cut rules.
 - **Why:** the 360° viewer built from the artisan's real photos is the product's foundation and is complete and verified; a 3D model would be generated content that departs from the "real photos" promise; new accounts usually have a zero quota for GPU endpoints (not checked here, and requesting one takes days); and the remaining time is better spent on real-photo testing, the architecture diagram, the evidence and the submission post.
 - **What stays:** the `ready_3d` status and the `glbKey` / `glb` fields remain in the data model and the viewer keeps its disabled 3D tab, so the feature can be added later without changing the contract. No GPU resource exists or is planned.
+
+## 2026-09-30 · Demo labeling kept neutral
+The app accepts real photos, so the interface no longer describes the sample sets as renders of 3D scans. Sample and demo content is labeled neutrally as "sample photos" or "demo" (and replays as recorded), and the "real photos" badge stays reserved for a user's own photos. The origin of the sample sets (renders of CC0 scans) is documented in `docs/CREDITS.md` and the earlier decision entry.

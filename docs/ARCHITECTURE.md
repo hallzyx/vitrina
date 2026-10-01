@@ -33,6 +33,10 @@ flowchart LR
 - **Processing** is a Step Functions Standard workflow. Per-photo work runs with concurrency 3 and retries on throttling.
 - **Sample gallery** runs the same pipeline on bundled sample photo sets (no phrase, protected by daily per-visitor and global caps), or replays a recorded run with its real step timings.
 
+## Real-time processing view
+
+While a product is processing, the token-protected status endpoint adds a live block: small previews of each finished photo and its cutout (same size, stored under media/<store>/<product>/live/), per-photo fidelity scores, the aligned thumbnails, the fidelity review and the brand palette once available. The frontend workbench renders them. The previews and progress attributes are removed when the run finishes or fails.
+
 ## Fidelity to the real product
 
 The pipeline never generates pixels. Background removal produces a mask and leaves the piece's pixels untouched. Titan embeddings compare each photo with its cutout (on every second frame, because the on-demand quota is 20 requests per minute) and drop frames that drifted; the product records how many frames were actually checked.
