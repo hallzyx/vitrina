@@ -140,3 +140,8 @@ Format: `date-time (America/Lima) · what was requested · what the agent did ·
 - **Result:** the first product now has 12 frames (it had 10); the second kept its 9 frames with evened-out sizes. Run times 40 to 51 s.
 - **Side effect:** product URLs changed (`/s/<slug>/<productId>`); the store link and the edit link did not.
 - **Tools:** AWS CLI (`dynamodb`, `stepfunctions`, `s3api`), curl.
+
+## 2026-10-01 · Artisan title kept verbatim
+- **Requested by the owner:** the title typed at upload must stay as written.
+- **Done (agent):** `apply_artisan_name` in the listing step; prompt wording adjusted; 105 tests pass (2 new). Change set reviewed (PipelineFunction and PipelineStateMachine only), `UPDATE_COMPLETE`. The two existing products of the owner's store got their typed names as titles through a DynamoDB update.
+- **Tools:** AWS SAM CLI, AWS CLI (`cloudformation`, `dynamodb`), pytest.

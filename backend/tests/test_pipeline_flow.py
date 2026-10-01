@@ -104,7 +104,7 @@ def test_full_run_produces_a_ready_360_product(stubs):
     assert len(item["frameKeys"]) == 10 and len(item["thumbKeys"]) == 10
     assert item["frameKeys"][0] == f"media/{STORE}/{PRODUCT}/f01.webp"
     assert isinstance(item["fidelityScore"], Decimal) and 0.8 <= float(item["fidelityScore"]) <= 1
-    assert item["copy"]["es"]["name"] == "Vasija terracota"
+    assert item["copy"]["es"]["name"] == "Terracotta vessel"  # the artisan wrote this name: it is used as is in both languages
     assert aligned["mode"] == "steady"
 
     s3 = boto3.client("s3")
@@ -171,6 +171,20 @@ def test_only_every_second_frame_is_scored_by_default_and_the_rest_is_reported_u
     assert item["status"] == "ready_360" and len(item["frameKeys"]) == 12
     assert checked["checked"] == 6 and item["fidelityChecked"] == 6
     assert sorted(f["index"] for f in aligned["frames"] if f["fidelity"] is not None) == [1, 3, 5, 7, 9, 11]
+
+
+def test_the_artisans_title_is_kept_verbatim_in_both_languages(stubs):
+    seed(8, name="Tomatodo insano", notes="terracotta")
+    _, _, _, written = run_pipeline()
+    assert written["copy"]["en"]["name"] == "Tomatodo insano" and written["copy"]["es"]["name"] == "Tomatodo insano"
+    assert written["copy"]["en"]["description"].startswith("A rounded vessel")  # the description is still the model's
+    assert product()["copy"]["es"]["name"] == "Tomatodo insano"
+
+
+def test_without_an_artisan_title_the_model_proposes_one(stubs):
+    seed(8, name="", notes="terracotta vasija")
+    _, _, _, written = run_pipeline()
+    assert written["copy"]["en"]["name"] == "Terracotta vessel" and written["copy"]["es"]["name"] == "Vasija terracota"
 
 
 def test_with_nothing_scored_the_product_is_ready_without_a_score(stubs, monkeypatch):

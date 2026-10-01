@@ -341,7 +341,7 @@ def listing(event: dict) -> dict:
         prompt = listing_mod.SYSTEM_LISTING + (("\n\n" + listing_mod.repair_hint(problems)) if problems else "")
         try:
             copy = listing_mod.validate_copy(ai.converse_json(prompt, content), facts)
-            return {"copy": copy, "fallback": False}
+            return {"copy": listing_mod.apply_artisan_name(copy, name_hint), "fallback": False}
         except listing_mod.ListingError as err:
             problems = err.args[0]
         except ValueError:  # not JSON

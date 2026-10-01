@@ -14,7 +14,7 @@ Return JSON only, exactly:
 Rules:
 - Describe only what is clearly visible in the photos (shape, colors, pattern, finish, proportions in relative terms) and what the artisan's notes say.
 - Do NOT state or guess materials, techniques, origin, age, maker, brand, dimensions, weight or capacity, and do not use words such as handmade, artisan, hand-thrown or authentic, unless that exact information appears in the notes.
-- If the artisan gave a name, keep it in the name of the language it was written in and give a natural equivalent in the other language.
+- If the artisan gave a name, the application uses it as the title in both languages; still return a name, and write the description for that piece.
 - name: 2 to 5 words. description: 1 to 3 short sentences, at most 320 characters, no hype, no invented claims.
 - The Spanish must read naturally, not as a literal translation."""
 
@@ -141,6 +141,19 @@ def fallback_copy(name_hint: str, notes: str, store_name: str) -> dict:
     es_name = clean(name_hint) or f"Pieza de {store_name}"
     description = clean(notes)[:MAX_DESCRIPTION]
     return {"en": {"name": en_name, "description": description}, "es": {"name": es_name, "description": description}}
+
+
+def apply_artisan_name(copy: dict, name_hint: str) -> dict:
+    """The artisan's own title wins: when one was written it is used as is in both languages.
+
+    The model may still translate or rephrase it, so the code decides, not the prompt. Only the
+    description remains the model's work.
+    """
+    name = clean(name_hint)[:MAX_NAME]
+    if name:
+        for lang in ("en", "es"):
+            copy[lang]["name"] = name
+    return copy
 
 
 def repair_hint(problems: list[str]) -> str:
