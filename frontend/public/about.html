@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>About Vitrina: let buyers spin your craft</title>
+    <meta name="description" content="Static summary of Vitrina, an AWS Zero to Shipped entry: a 360 degree storefront built from an artisan's real photos, how to evaluate it, and where the documentation is." />
+    <style>
+      body { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; max-width: 46rem; margin: 2rem auto; padding: 0 1rem 3rem; line-height: 1.6; color: #2b2118; background: #faf7f2; }
+      h1 { font-size: 2rem; margin-bottom: .25rem; }
+      h2 { margin-top: 2rem; font-size: 1.25rem; }
+      a { color: #a4452b; }
+      code { background: #efe4d4; padding: .1rem .35rem; border-radius: .25rem; }
+      table { border-collapse: collapse; width: 100%; font-size: .95rem; }
+      th, td { border: 1px solid #e3d6c4; padding: .4rem .6rem; text-align: left; vertical-align: top; }
+      .note { background: #fff; border: 1px solid #e3d6c4; border-radius: .5rem; padding: .75rem 1rem; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Vitrina</h1>
+      <p><strong>Let buyers spin your craft.</strong> An artisan uploads about 12 photos of a handmade piece and gets a public storefront where buyers rotate it 360 degrees using only the artisan's real photos, and order on WhatsApp. No accounts. English and Spanish.</p>
+      <p>AWS Zero to Shipped entry. Category: <strong>Commercial Potential</strong>. Focus track: <strong>Startup</strong>.</p>
+
+      <h2>Evaluate it (no code, no sign-up)</h2>
+      <ul>
+        <li><a href="/s/example">Example store</a>: drag a product to spin it, open it for the buyer view and WhatsApp button.</li>
+        <li><a href="/create">Create flow</a>: choose "Try with sample photos" to watch the real pipeline process a photo set live.</li>
+        <li><a href="/api/public/example">Example store as JSON</a> and <a href="/api/health">health check</a>.</li>
+      </ul>
+      <p class="note">Uploading your own photos needs an invite phrase because it spends AWS resources. The phrase is in the Builder Center post of this submission. Everything else is open.</p>
+
+      <h2>The problem</h2>
+      <p>Small artisans sell through chat apps with a handful of flat photos. A buyer cannot turn a piece in their hands, so they hesitate, ask for more pictures, or leave. Vitrina gives them a store that shows the piece from every side, built from a phone photo session.</p>
+
+      <h2>What makes it different</h2>
+      <p>Fidelity to the real product. Background removal produces a mask only, so the piece's pixels are never altered. Each processed frame is compared with its original photo using Amazon Titan Multimodal Embeddings, and frames that drift are discarded. The listing, written with Amazon Nova Pro, is validated in code so it cannot invent materials, origin or measurements.</p>
+
+      <h2>AWS services</h2>
+      <table>
+        <tr><th>Service</th><th>Role</th></tr>
+        <tr><td>Amazon Bedrock</td><td>Titan embeddings (fidelity check), Nova Pro (brand and English/Spanish listing)</td></tr>
+        <tr><td>AWS Step Functions</td><td>Seven-step pipeline with per-photo parallelism and retries</td></tr>
+        <tr><td>AWS Lambda, Amazon API Gateway</td><td>API and pipeline tasks (Python 3.12)</td></tr>
+        <tr><td>Amazon S3, Amazon CloudFront</td><td>Site, private uploads, processed frames</td></tr>
+        <tr><td>Amazon DynamoDB</td><td>Stores, products, stats, rate-limit counters</td></tr>
+        <tr><td>SSM Parameter Store, IAM, Budgets</td><td>Invite phrase, least-privilege roles with a permissions boundary, USD 20 monthly cap</td></tr>
+        <tr><td>AWS SAM</td><td>The whole stack as code</td></tr>
+      </table>
+
+      <h2>Built with a coding agent</h2>
+      <p>Claude Code connected to the AWS MCP Server, working as a limited IAM user (never root). Every AWS-changing step is logged in the build log; every deploy went through a reviewed CloudFormation change set.</p>
+
+      <h2>Documentation</h2>
+      <ul>
+        <li><a href="https://github.com/hallzyx/vitrina">Repository</a></li>
+        <li><a href="https://github.com/hallzyx/vitrina/blob/main/docs/SUBMISSION.md">Submission summary</a></li>
+        <li><a href="https://github.com/hallzyx/vitrina/blob/main/docs/COMPLIANCE.md">Compliance with the hackathon rules</a></li>
+        <li><a href="https://github.com/hallzyx/vitrina/blob/main/docs/PRODUCT.md">Product, problem and market</a></li>
+        <li><a href="https://github.com/hallzyx/vitrina/blob/main/docs/ARCHITECTURE.md">Architecture</a></li>
+        <li><a href="https://github.com/hallzyx/vitrina/blob/main/docs/BUILD_LOG.md">Build log</a> and <a href="https://github.com/hallzyx/vitrina/blob/main/docs/DECISIONS.md">decisions</a></li>
+        <li><a href="/llms.txt">Plain-text summary for AI readers</a></li>
+      </ul>
+
+      <h2>Honest notes</h2>
+      <p>The example store and the sample gallery use demo photo sets (renders of CC0 3D scans, credited in the repository); the pipeline on them is the real one, and it was also tested with real phone photos. Fidelity scores are a coarse detector, not pixel-exact.</p>
+    </main>
+  </body>
+</html>

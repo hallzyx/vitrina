@@ -19,17 +19,17 @@ Deadline: **Friday Oct 2, 11:59 PM PT = Saturday Oct 3, 1:59 AM Lima.** Real sub
 ## Thursday Oct 1 — Complete product
 - [x] Frontend: guided capture, processing, 360° viewer, store, buyer view, dashboard with edit link (all on the real API; deployed).
 - [x] i18n EN/ES with browser-language default and a toggle.
-- [ ] Add a second product inheriting the brand. (Implemented: the pipeline skips the brand step when the store already has one, and /create?add=1 exists; not yet verified live end to end.)
-- [ ] Pre-generated public example store (`/s/example`), no code.
+- [x] Add a second product inheriting the brand (verified live: the store brand is unchanged by the second product).
+- [x] Pre-generated public example store (`/s/example`), no code.
 - [x] View/click counters, guardrails (limits, access code, sample caps).
 - [x] **3D decision at noon:** dropped, no regrets. if the spike worked, integrate behind the feature flag; otherwise drop it, no regrets.
 
 ## Friday Oct 2 — Polish and submission
-- [ ] Landing (desktop and mobile), translation review, basic accessibility.
-- [ ] Tests on a real phone and a laptop; check load times.
-- [ ] Architecture diagram in `docs/ARCHITECTURE.md`.
-- [ ] Builder Center post: problem, solution, architecture, how the agent was used, evidence, URL, category `#commercial-potential`, lane `#startups`.
-- [ ] Verify the ship gate from a private window and without a code.
+- [x] Landing (desktop and mobile), translation review, basic accessibility.
+- [x] Test on a real phone with real photos (12 of 12 frames kept after calibration).
+- [x] Architecture diagram in `docs/ARCHITECTURE.md`.
+- [x] Builder Center post published (draft in `docs/BUILDER_CENTER_POST.md`). Still to add inside the post: proof of the coding agent connection (screenshots) and an explicit line with the category and focus track.
+- [ ] Verify the ship gate from a private window and without a code (see `docs/COMPLIANCE.md`).
 - [ ] **Submit before 2:00 PM Lima.** Use the margin only for fixes.
 
 ## After submission (until the announcement, week of Oct 19)

@@ -1,0 +1,27 @@
+# Vitrina
+
+> Vitrina turns about 12 phone photos of a handmade piece into a public storefront where buyers rotate it 360 degrees using only the artisan's real photos, and order on WhatsApp. No generative AI touches the piece. No accounts. English and Spanish. Entry to the AWS Zero to Shipped hackathon: category Commercial Potential, focus track Startup.
+
+Live app (public, no code or sign-up needed to evaluate): https://dz81nhpgrhb93.cloudfront.net
+
+## Evaluate it in under a minute
+- Example store with spinnable products: https://dz81nhpgrhb93.cloudfront.net/s/example (drag a product to spin it; open a product for the buyer view and the WhatsApp button)
+- Watch the real pipeline run on a sample photo set: https://dz81nhpgrhb93.cloudfront.net/create then "Try with sample photos" (no code needed; daily caps apply, with a labeled replay when exhausted)
+- Machine-readable example store: https://dz81nhpgrhb93.cloudfront.net/api/public/example
+- Health check: https://dz81nhpgrhb93.cloudfront.net/api/health
+- Static summary page: https://dz81nhpgrhb93.cloudfront.net/about.html
+
+## Documentation (repository: https://github.com/hallzyx/vitrina)
+- Submission summary for judges: https://github.com/hallzyx/vitrina/blob/main/docs/SUBMISSION.md
+- Compliance with the hackathon rules, requirement by requirement: https://github.com/hallzyx/vitrina/blob/main/docs/COMPLIANCE.md
+- Product, problem and market: https://github.com/hallzyx/vitrina/blob/main/docs/PRODUCT.md
+- Architecture: https://github.com/hallzyx/vitrina/blob/main/docs/ARCHITECTURE.md
+- Build log (every AWS-changing step, with the coding agent): https://github.com/hallzyx/vitrina/blob/main/docs/BUILD_LOG.md
+- Decisions and trade-offs: https://github.com/hallzyx/vitrina/blob/main/docs/DECISIONS.md
+
+## Key facts
+- AWS services: Amazon Bedrock (Titan Multimodal Embeddings for the fidelity check, Nova Pro for brand and the English/Spanish listing), AWS Step Functions, AWS Lambda, Amazon API Gateway, Amazon S3, Amazon CloudFront, Amazon DynamoDB, AWS Systems Manager Parameter Store, AWS IAM, AWS Budgets, AWS SAM.
+- Built with Claude Code connected to the AWS MCP Server, as a limited IAM user; every deploy went through a reviewed CloudFormation change set.
+- Fidelity: background removal produces a mask only (the piece's pixels are never altered); each frame is compared with its original photo using embeddings and frames that drift are discarded.
+- Creating a store with your own photos needs an invite phrase (spend control), given in the Builder Center post; everything else is open.
+- Demo photo sets in the example store and the sample gallery are renders of CC0 3D scans (credits in docs/CREDITS.md); the pipeline on them is the real one.
