@@ -35,7 +35,7 @@ flowchart LR
 
 ## Real-time processing view
 
-While a product is processing, the token-protected status endpoint adds a live block: small previews of each finished photo and its cutout (same size, stored under media/<store>/<product>/live/), per-photo fidelity scores, the aligned thumbnails, the fidelity review and the brand palette once available. The frontend workbench renders them. The previews and progress attributes are removed when the run finishes or fails.
+While a product is processing, the token-protected status endpoint adds a `live` block: small previews of each finished photo and its cutout (same size, stored under `media/<store>/<product>/live/`), per-photo fidelity scores, the aligned thumbnails, the fidelity review and the brand palette once available. The frontend `workbench` renders them. The previews and progress attributes are removed when the run finishes or fails.
 
 ## Fidelity to the real product
 
