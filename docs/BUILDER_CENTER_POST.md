@@ -4,11 +4,14 @@ Title (7 to 255 chars):
   Vitrina: let buyers spin handmade crafts, using only the artisan's real photos
 Description (max 512 chars):
   Vitrina turns about 12 phone photos of a handmade piece into a public storefront where buyers rotate it 360 degrees and order on WhatsApp. No generative AI touches the piece: background removal is mask-only and every frame is checked against its original photo. Built on Amazon Bedrock, Step Functions, Lambda, DynamoDB, S3 and CloudFront, with Claude Code and the AWS MCP Server.
-Tags (max 5): commercial-potential, startups, amazon-bedrock, aws-step-functions, serverless
+Tags (max 5, AWS products): Amazon Bedrock, AWS Step Functions, AWS Lambda, Amazon CloudFront, Amazon DynamoDB
+Hackathon hashtags go in the first line of the body: #commercial-potential #startups
 GitHub: https://github.com/hallzyx/vitrina
 Live demo: https://dz81nhpgrhb93.cloudfront.net
 Notebook: leave empty
 -->
+
+**AWS Zero to Shipped** · #commercial-potential · #startups
 
 Small artisans sell through chat apps with a handful of flat photos. A buyer cannot turn a piece in their hands, so they hesitate, ask for more pictures, or leave. **Vitrina** fixes that with something an artisan can do with a phone in a few minutes.
 
