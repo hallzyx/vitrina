@@ -1,10 +1,10 @@
 import { useEffect, useState, type FormEvent } from "react";
-import { LuArrowRight, LuBox, LuEye, LuImageOff, LuKeyRound, LuMessageCircle, LuPackage, LuPlus } from "react-icons/lu";
+import { LuArrowRight, LuBox, LuPencil, LuEye, LuImageOff, LuKeyRound, LuMessageCircle, LuPackage, LuPlus } from "react-icons/lu";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { CopyButton, EmptyState, ErrorNote, Footer, LoadError, RecordedNote, Skeleton, Spinner, Topbar } from "../components/Chrome";
 import { stepIndexOf, stepKey } from "../components/Pipeline";
 import { BrandEditor, ContactFields, isValidWhatsapp, whatsappDigits, type BrandDraft } from "../components/StoreForms";
-import { btn, card } from "../components/ui";
+import { btn, card, label } from "../components/ui";
 import { useI18n, type TKey } from "../i18n";
 import {
   getMe,
@@ -13,6 +13,7 @@ import {
   publishStore,
   saveSessionToken,
   TONES,
+  updateProduct,
   updateStore,
   type MeResponse,
   type OwnerProduct,
@@ -156,7 +157,7 @@ function DashboardView({ token, me, onChange }: { token: string; me: MeResponse;
           ) : (
             <ul className="mb-3 grid gap-2.5">
               {products.map((p) => (
-                <ProductRow key={p.id} product={p} store={store} counts={stats.products[p.id]} />
+                <ProductRow key={p.id} product={p} store={store} counts={stats.products[p.id]} token={token} onSaved={(saved) => onChange({ ...me, products: me.products.map((x) => (x.id === saved.id ? saved : x)) })} />
               ))}
             </ul>
           )}
@@ -189,7 +190,7 @@ function DashboardView({ token, me, onChange }: { token: string; me: MeResponse;
   );
 }
 
-function ProductRow({ product, store, counts }: { product: OwnerProduct; store: OwnerStore; counts?: { views: number; clicks: number } }) {
+function ProductRow({ product, store, counts, token, onSaved }: { product: OwnerProduct; store: OwnerStore; counts?: { views: number; clicks: number }; token: string; onSaved: (product: OwnerProduct) => void }) {
   const { t, lang, money } = useI18n();
   const text = productText(product, lang);
   const thumb = thumbOf(product);
@@ -197,6 +198,7 @@ function ProductRow({ product, store, counts }: { product: OwnerProduct; store: 
   const statusKey = ready ? "ready" : product.status === "processing" || product.status === "failed" || product.status === "uploading" ? product.status : "processing";
   const demo = isDemoProduct(product, store.demo);
   const linkable = ready && store.status === "published";
+  const [editing, setEditing] = useState(false);
   return (
     <li className={`${card} grid grid-cols-[56px_1fr_auto] items-center gap-x-3 gap-y-1 p-3 sm:grid-cols-[64px_1.4fr_1fr_auto_auto] sm:gap-x-5`}>
       <span className="row-span-3 grid size-14 place-items-center overflow-hidden rounded-xl bg-[radial-gradient(circle_at_50%_40%,#fff,#efe4d4)] sm:row-span-1 sm:size-16">
@@ -245,7 +247,93 @@ function ProductRow({ product, store, counts }: { product: OwnerProduct; store: 
       ) : (
         <span className="col-start-3 row-span-3 row-start-1 size-10 sm:col-start-auto sm:row-span-1 sm:row-start-auto" aria-hidden="true" />
       )}
+      {ready && (
+        <div className="col-span-full">
+          <button type="button" className={btn("outline", "sm")} aria-expanded={editing} onClick={() => setEditing((v) => !v)}>
+            <LuPencil aria-hidden="true" className="size-4" /> {t(editing ? "dash.editClose" : "dash.edit")}
+          </button>
+          {editing && <ProductEditor token={token} product={product} currency={store.currency} onSaved={onSaved} />}
+        </div>
+      )}
     </li>
+  );
+}
+
+function ProductEditor({ token, product, currency, onSaved }: { token: string; product: OwnerProduct; currency: string; onSaved: (product: OwnerProduct) => void }) {
+  const { t } = useI18n();
+  const [nameEn, setNameEn] = useState(product.copy.en?.name ?? "");
+  const [descEn, setDescEn] = useState(product.copy.en?.description ?? "");
+  const [nameEs, setNameEs] = useState(product.copy.es?.name ?? "");
+  const [descEs, setDescEs] = useState(product.copy.es?.description ?? "");
+  const [price, setPrice] = useState(typeof product.price === "number" ? String(product.price) : "");
+  const [busy, setBusy] = useState(false);
+  const [touched, setTouched] = useState(false);
+  const [message, setMessage] = useState<{ kind: "ok" | "error"; key: TKey } | null>(null);
+
+  const priceValue = price.trim() === "" ? undefined : Number(price);
+  const priceInvalid = priceValue !== undefined && (!Number.isFinite(priceValue) || priceValue < 0);
+  const namesMissing = !nameEn.trim() || !nameEs.trim();
+
+  const save = async (e: FormEvent) => {
+    e.preventDefault();
+    if (busy) return;
+    setTouched(true);
+    if (priceInvalid || namesMissing) {
+      setMessage({ kind: "error", key: "result.fixFields" });
+      return;
+    }
+    setBusy(true);
+    setMessage(null);
+    try {
+      const { product: saved } = await updateProduct(token, product.id, {
+        copy: { en: { name: nameEn.trim(), description: descEn.trim() }, es: { name: nameEs.trim(), description: descEs.trim() } },
+        ...(priceValue !== undefined ? { price: priceValue } : {}),
+      });
+      onSaved({ ...product, ...saved });
+      setMessage({ kind: "ok", key: "result.saved" });
+    } catch (err) {
+      setMessage({ kind: "error", key: apiErrorKey(err) });
+    }
+    setBusy(false);
+  };
+
+  return (
+    <form className="mt-3 grid gap-3 border-t border-line pt-3" onSubmit={save} noValidate>
+      {(["en", "es"] as const).map((lang) => {
+        const [name, setName, desc, setDesc] = lang === "en" ? [nameEn, setNameEn, descEn, setDescEn] : [nameEs, setNameEs, descEs, setDescEs];
+        return (
+          <fieldset key={lang} className="grid gap-3 rounded-2xl border border-line p-3.5" lang={lang}>
+            <legend className="px-1 text-xs font-bold uppercase tracking-wider text-ink-soft">{t(lang === "en" ? "result.english" : "result.spanish")}</legend>
+            <label className={label}>
+              {t("result.name")}
+              <input value={name} onChange={(e) => setName(e.target.value)} maxLength={80} aria-invalid={touched && !name.trim()} />
+            </label>
+            <label className={label}>
+              {t("result.description")}
+              <textarea value={desc} onChange={(e) => setDesc(e.target.value)} rows={3} maxLength={400} />
+            </label>
+          </fieldset>
+        );
+      })}
+      {touched && namesMissing && <p className="text-sm font-semibold text-terracotta-deep">{t("result.namesRequired")}</p>}
+      <label className={label}>
+        {t("result.price", { currency })}
+        <input value={price} onChange={(e) => setPrice(e.target.value.replace(/[^0-9.]/g, ""))} inputMode="decimal" placeholder="48" aria-invalid={priceInvalid} />
+        {priceInvalid && <small className="font-semibold text-terracotta-deep">{t("result.priceInvalid")}</small>}
+      </label>
+      <div aria-live="polite" className="min-h-6">
+        {message?.kind === "ok" && (
+          <p className="text-sm font-semibold text-olive-deep" role="status">
+            {t(message.key)}
+          </p>
+        )}
+        {message?.kind === "error" && <ErrorNote message={t(message.key)} />}
+      </div>
+      <button type="submit" className={btn("brand", "md", "justify-self-start")} disabled={busy}>
+        {busy && <Spinner className="size-4 border-white/40 border-t-white" />}
+        {t("dash.saveListing")}
+      </button>
+    </form>
   );
 }
 

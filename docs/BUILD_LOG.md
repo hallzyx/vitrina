@@ -99,3 +99,10 @@ Format: `date-time (America/Lima) · what was requested · what the agent did ·
 - **Requested by the owner:** the viewer showed a locked "3D" tab; 3D was dropped earlier (see DECISIONS), so the placeholder only looked broken.
 - **Done (agent):** removed the disabled tab and its i18n keys from the viewer; wrote `docs/ARCHITECTURE.md` (Mermaid diagram, request paths, guardrails). Frontend rebuilt and published to the frontend bucket, CloudFront invalidated for `/` and `/index.html`.
 - **Tools:** npm/Vite, AWS CLI (`s3`, `cloudfront`, `cloudformation`).
+
+## 2026-09-30 · Dashboard listing/price editor and a live end-to-end run
+- **Requested by the owner:** finish the dashboard (edit the listing and price of ready products), then verify "add a second product inherits the brand" live.
+- **Done (agent):** `Edit listing` panel on each ready product in `/edit/:token` (EN/ES name and description, price) calling the existing `PUT /api/stores/{id}/products/{id}`; frontend rebuilt, published and CloudFront invalidated.
+- **Live verification (production, scripted):** created a store, processed two products from different sample sets (12 photos each, fidelity sampled on every second frame, both `ready_360`), confirmed the second product left the store brand unchanged, edited listing and price (200), rejected a negative price (400) and a missing token (403), published, and confirmed the edits on the public store endpoint. The test store, its products and files were deleted afterwards; `example` untouched.
+- **Not verified:** the editor UI itself in a browser (type-checked and API-verified only), and a run with photos from a real phone.
+- **Tools:** AWS CLI (`s3`, `cloudfront`, `dynamodb`), curl, Vite.
