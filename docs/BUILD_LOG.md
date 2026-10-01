@@ -114,3 +114,10 @@ Format: `date-time (America/Lima) · what was requested · what the agent did ·
 - **Live verification:** a real sample run on production streamed 12 previews photo by photo, then aligned thumbnails, the fidelity review and the brand; final score 0.9889 with 6 frames scored; the `live` block and the preview files were gone after the run. The two test stores were deleted.
 - **Not verified:** the workbench visually on a deployed run and on a real phone (the agent checked it with simulated responses only).
 - **Tools:** AWS SAM CLI, AWS CLI (`cloudformation`, `s3`, `cloudfront`, `dynamodb`), curl, pytest (98 passing).
+
+## 2026-09-30 · Fix: edit links returned S3 AccessDenied when opened directly
+- **Reported by the owner:** the magic link of their store showed `AccessDenied`.
+- **Cause:** the CloudFront SPA-rewrite function served `index.html` only for URIs without a dot. The edit link `/edit/<storeId>.<secret>` contains a dot, so CloudFront asked S3 for a missing object. In-app navigation hid the bug (client-side routing), and my API-level tests could not see it. A reload or a link opened from a message or a new tab failed.
+- **Fix:** the function also rewrites any `/edit/*` URI. Change set reviewed (in-place modifications of the function, the distribution and the raw bucket, no replacements), `UPDATE_COMPLETE`. Checked on production: `/edit/<token with dot>`, `/edit/x`, `/s/example` and `/create` return the app (200); a missing asset still returns 403.
+- **Lesson:** direct-load URL tests for every client route are now part of the deploy checks.
+- **Tools:** AWS SAM CLI, AWS CLI (`cloudformation`), curl.

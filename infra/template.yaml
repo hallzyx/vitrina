@@ -238,12 +238,13 @@ Resources:
       Name: !Sub "${AWS::StackName}-spa-rewrite"
       AutoPublish: true
       FunctionConfig:
-        Comment: Serve index.html for client-side routes (URIs without a file extension)
+        Comment: Serve index.html for client-side routes (URIs without a file extension, plus /edit/*)
         Runtime: cloudfront-js-2.0
       FunctionCode: |
         function handler(event) {
           var request = event.request;
-          if (request.uri.indexOf('.') === -1) {
+          // The edit link /edit/<storeId>.<secret> contains a dot but is still a client-side route.
+          if (request.uri.indexOf('.') === -1 || request.uri.indexOf('/edit/') === 0) {
             request.uri = '/index.html';
           }
           return request;
