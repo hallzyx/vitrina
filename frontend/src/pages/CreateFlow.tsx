@@ -204,7 +204,7 @@ export function CreateFlow() {
               />
             )}
             {screen.name === "replay" && (
-              <ReplayProcessing product={screen.product} onDone={() => setScreen({ name: "recorded", store: screen.store, product: screen.product })} />
+              <ReplayProcessing store={screen.store} product={screen.product} onDone={() => setScreen({ name: "recorded", store: screen.store, product: screen.product })} />
             )}
             {screen.name === "recorded" && (
               <RecordedResult

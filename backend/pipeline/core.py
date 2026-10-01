@@ -73,10 +73,22 @@ def put_s3(bucket: str, key: str, body: bytes, content_type: str, cache_control:
 # ---- S3 key layout -------------------------------------------------------------------------
 # work/  private intermediate cutouts (never served)
 # media/ public frames and thumbnails, served by CloudFront at /media/*
+# media/<store>/<product>/live/  small progress previews (photo and cutout), only while processing:
+#        listed by the token-protected status endpoint and deleted when the run finishes or fails
 
 
 def cut_key(store_id: str, product_id: str, index: int) -> str:
     return f"work/{store_id}/{product_id}/cut-{index:02d}.png"
+
+
+def preview_keys(store_id: str, product_id: str, index: int) -> tuple[str, str]:
+    """(photo, cutout) progress previews of one photo. Same size, so the cutout overlays the photo exactly."""
+    base = f"media/{store_id}/{product_id}/live/p{index:02d}"
+    return f"{base}-o.webp", f"{base}-c.webp"
+
+
+# Progress attributes on the product item, written while the run is in flight and removed at the end.
+LIVE_ATTRIBUTES = ("previews", "alignedThumbs", "fidelityReview")
 
 
 def frame_key(store_id: str, product_id: str, index: int) -> str:
@@ -122,9 +134,35 @@ def set_step(store_id: str, product_id: str, step: str, **extra) -> None:
     )
 
 
-def bump_photos_done(store_id: str, product_id: str) -> None:
+def bump_photos_done(store_id: str, product_id: str, preview: dict | None = None) -> None:
+    """Count one finished photo and, if given, append its progress preview in the same write."""
+    expr, values = "ADD photosDone :one", {":one": 1}
+    if preview is not None:
+        expr += " SET previews = list_append(if_not_exists(previews, :empty), :p)"
+        values.update({":empty": [], ":p": [preview]})
     table("TABLE_PRODUCTS").update_item(
         Key=product_key(store_id, product_id),
-        UpdateExpression="ADD photosDone :one",
-        ExpressionAttributeValues={":one": 1},
+        UpdateExpression=expr,
+        ExpressionAttributeValues=values,
     )
+
+
+def end_run(store_id: str, product_id: str, set_expr: str, names: dict, values: dict, remove: tuple = ()) -> None:
+    """Write the run's final state, drop the progress attributes in the same write, then delete their previews.
+
+    Deleting the preview files is best effort and never fails the run.
+    """
+    old = table("TABLE_PRODUCTS").update_item(
+        Key=product_key(store_id, product_id),
+        UpdateExpression=f"{set_expr} REMOVE {', '.join([*remove, *LIVE_ATTRIBUTES])}",
+        ExpressionAttributeNames=names,
+        ExpressionAttributeValues=values,
+        ReturnValues="ALL_OLD",
+    ).get("Attributes", {})
+    count = max(len(old.get("rawKeys") or []), max((int(p["i"]) for p in old.get("previews") or []), default=0))
+    keys = [{"Key": k} for i in range(1, count + 1) for k in preview_keys(store_id, product_id, i)]
+    try:
+        if keys:
+            s3().delete_objects(Bucket=processed_bucket(), Delete={"Objects": keys, "Quiet": True})
+    except Exception:  # noqa: BLE001 - leftovers live under an unguessable path and are never listed again
+        pass

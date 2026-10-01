@@ -12,3 +12,5 @@ test-photos/
 venv/
 *.pem
 dist/
+
+.codegraph/

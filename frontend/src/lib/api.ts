@@ -109,12 +109,30 @@ export interface MeResponse {
   stats: Counts & { products: Record<string, Counts> };
 }
 
+/** One photo whose background is removed: the photo and its cutout at the same size, with its real score. */
+export interface LivePreview {
+  index: number;
+  photo: string;
+  cutout: string;
+  /** null: this photo was not scored (only some are, to respect the embedding model's rate limit). */
+  fidelity: number | null;
+}
+
+/** What a run in flight has produced so far. Only present while `status` is `processing`. */
+export interface LiveProgress {
+  previews: LivePreview[];
+  aligned: { index: number; thumb: string }[];
+  review?: { threshold: number | null; dropped: number[] };
+  brand?: Brand;
+}
+
 export interface StatusResponse {
   status: ProductStatus;
   step: PipelineStep | null;
   stepIndex: number;
   totalSteps: number;
   photos: { done: number; total: number };
+  live?: LiveProgress;
   error?: PipelineError;
   frames?: string[];
   thumbs?: string[];

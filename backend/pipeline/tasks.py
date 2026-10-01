@@ -19,11 +19,13 @@ from core import (
     PipelineError,
     bump_photos_done,
     cut_key,
+    end_run,
     env_float,
     env_int,
     frame_key,
     get_product,
     get_store,
+    preview_keys,
     processed_bucket,
     product_key,
     put_s3,
@@ -61,7 +63,7 @@ def validate(event: dict) -> dict:
     store_id, product_id = _ids(event)
     product = get_product(store_id, product_id)
     keys = product["rawKeys"]
-    set_step(store_id, product_id, "validate", status="processing", photosDone=0, photosTotal=len(keys))
+    set_step(store_id, product_id, "validate", status="processing", photosDone=0, photosTotal=len(keys), previews=[])
     min_side = env_int("MIN_SIDE_PX", 600)
 
     def inspect(item):
@@ -106,6 +108,23 @@ def validate(event: dict) -> dict:
 # ---------------------------------------------------------------------------------------------
 
 
+def _write_preview(store_id: str, product_id: str, index: int, image: Image.Image, rgba: Image.Image, score) -> dict | None:
+    """Progress preview of one finished photo for the creator's processing screen, or None if it could not be written.
+
+    The previews are a nicety: a failure here never fails the photo.
+    """
+    photo_key, cutout_key = preview_keys(store_id, product_id, index)
+    # Short-lived and private: deleted when the run ends, so neither CloudFront nor shared caches should keep them.
+    cache = "private, max-age=900"
+    try:
+        photo, cutout = imaging.preview_pair(image, rgba)
+        put_s3(processed_bucket(), photo_key, photo, "image/webp", cache)
+        put_s3(processed_bucket(), cutout_key, cutout, "image/webp", cache)
+    except Exception:  # noqa: BLE001
+        return None
+    return {"i": index, "o": photo_key, "c": cutout_key, "s": Decimal(str(score)) if score is not None else None}
+
+
 def process_photo(event: dict) -> dict:
     store_id, product_id = _ids(event)
     photo = event["photo"]
@@ -144,7 +163,7 @@ def process_photo(event: dict) -> dict:
             score = None
     except PipelineError as err:
         return {"index": index, "ok": False, "reason": err.code}
-    bump_photos_done(store_id, product_id)
+    bump_photos_done(store_id, product_id, _write_preview(store_id, product_id, index, image, rgba, score))
     return {
         "index": index,
         "ok": True,
@@ -191,6 +210,12 @@ def align(event: dict) -> dict:
 
     with ThreadPoolExecutor(WORKERS) as pool:
         frames = list(pool.map(build, zip(cutouts, layout["placements"])))
+    # The aligned thumbnails let the processing screen spin the piece before the run is finished.
+    table("TABLE_PRODUCTS").update_item(
+        Key=product_key(store_id, product_id),
+        UpdateExpression="SET alignedThumbs = :a",
+        ExpressionAttributeValues={":a": [{"i": f["index"], "k": f["thumbKey"]} for f in frames]},
+    )
     return {"frames": frames, "mode": layout["mode"], "scale": round(layout["scale"], 4)}
 
 
@@ -226,6 +251,13 @@ def fidelity(event: dict) -> dict:
             Bucket=processed_bucket(),
             Delete={"Objects": [{"Key": frame["frameKey"]}, {"Key": frame["thumbKey"]}]},
         )
+    table("TABLE_PRODUCTS").update_item(
+        Key=product_key(store_id, product_id),
+        UpdateExpression="SET fidelityReview = :r",
+        ExpressionAttributeValues={
+            ":r": {"threshold": Decimal(str(threshold)) if threshold is not None else None, "dropped": [f["index"] for f in dropped]}
+        },
+    )
     kept_scores = [f["fidelity"] for f in kept if f.get("fidelity") is not None]
     return {
         "kept": kept,
@@ -325,7 +357,6 @@ def finalize(event: dict) -> dict:
         "SET #s = :ready, #step = :step, frameKeys = :frames, thumbKeys = :thumbs, #copy = :copy, "
         "fidelityChecked = :checked, completedAt = :now"
         + (", fidelityScore = :score" if score is not None else "")
-        + " REMOVE #err" + ("" if score is not None else ", fidelityScore")
     )
     values = {
         ":ready": "ready_360",
@@ -338,11 +369,14 @@ def finalize(event: dict) -> dict:
     }
     if score is not None:
         values[":score"] = Decimal(str(score))
-    table("TABLE_PRODUCTS").update_item(
-        Key=product_key(store_id, product_id),
-        UpdateExpression=expression,
-        ExpressionAttributeNames={"#s": "status", "#step": "step", "#copy": "copy", "#err": "error"},
-        ExpressionAttributeValues=values,
+    # The progress previews go away with the run; the frames are the product now.
+    end_run(
+        store_id,
+        product_id,
+        expression,
+        {"#s": "status", "#step": "step", "#copy": "copy", "#err": "error"},
+        values,
+        remove=("#err",) if score is not None else ("#err", "fidelityScore"),
     )
     # The intermediate cutouts are private scratch files; remove them once the frames exist.
     listed = s3().list_objects_v2(Bucket=processed_bucket(), Prefix=f"work/{store_id}/{product_id}/")
@@ -375,10 +409,11 @@ def fail(event: dict) -> dict:
         code, message = "timeout", "Processing took too long."
     else:
         code, message = "internal_error", "Something went wrong while processing the photos."
-    table("TABLE_PRODUCTS").update_item(
-        Key=product_key(store_id, product_id),
-        UpdateExpression="SET #s = :failed, #err = :err",
-        ExpressionAttributeNames={"#s": "status", "#err": "error"},
-        ExpressionAttributeValues={":failed": "failed", ":err": {"code": code, "message": message[:300]}},
+    end_run(
+        store_id,
+        product_id,
+        "SET #s = :failed, #err = :err",
+        {"#s": "status", "#err": "error"},
+        {":failed": "failed", ":err": {"code": code, "message": message[:300]}},
     )
     return {"status": "failed", "code": code}

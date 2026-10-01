@@ -10,6 +10,7 @@ from core import PipelineError
 ALLOWED_FORMATS = {"JPEG", "PNG", "WEBP"}
 FRAME_SIZE = 1024
 THUMB_SIZE = 320
+PREVIEW_SIZE = 480
 
 
 def open_image(data: bytes) -> Image.Image:
@@ -127,6 +128,12 @@ def render_frame(cutout: Image.Image, box, scale: float, position, size: int = F
     canvas = Image.new("RGBA", (size, size), (0, 0, 0, 0))
     canvas.alpha_composite(piece, dest=(max(0, position[0]), max(0, position[1])))
     return canvas
+
+
+def preview_pair(photo: Image.Image, cutout: Image.Image, longest: int = PREVIEW_SIZE) -> tuple[bytes, bytes]:
+    """Small WebP copies of a photo and of its cutout (transparent background), at the same size."""
+    small = limit_size(photo, longest)
+    return webp_bytes(small, 74), webp_bytes(cutout.resize(small.size, Image.LANCZOS), 80)
 
 
 def webp_bytes(image: Image.Image, quality: int = 88) -> bytes:

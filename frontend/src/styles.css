@@ -153,6 +153,186 @@
   }
 }
 
+/*
+ * Processing workbench. Everything that moves is a one-shot CSS animation on transform, opacity or a
+ * clip, so polls never restart them and the main thread stays free on mid-range phones.
+ */
+@layer components {
+  .bench-studio {
+    background: radial-gradient(circle at 50% 38%, #fff 0%, #f1e6d7 100%);
+  }
+
+  /* A photo "develops" into its cutout: the photo is cut away top to bottom behind a scan line. */
+  .bench-develop {
+    animation: bench-develop var(--bench-wipe, 1.25s) cubic-bezier(0.65, 0, 0.35, 1) both;
+  }
+  .bench-scan {
+    animation: bench-scan var(--bench-wipe, 1.25s) cubic-bezier(0.65, 0, 0.35, 1) both;
+  }
+  .bench-scan::before {
+    content: "";
+    position: absolute;
+    inset-inline: 0;
+    top: 0;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, var(--color-ember) 18%, #fff 50%, var(--color-ember) 82%, transparent);
+    box-shadow: 0 0 14px 3px rgb(240 154 110 / 0.55);
+  }
+
+  .bench-fade {
+    animation: bench-fade 0.6s var(--ease-out-soft) both;
+  }
+  .bench-pop {
+    animation: bench-pop 0.55s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  }
+  .bench-guide-x {
+    transform-origin: left;
+    animation: bench-grow-x 0.9s var(--ease-out-soft) 0.2s both;
+  }
+  .bench-guide-y {
+    transform-origin: top;
+    animation: bench-grow-y 0.9s var(--ease-out-soft) both;
+  }
+  .bench-shimmer {
+    background: linear-gradient(100deg, transparent 30%, rgb(255 255 255 / 0.5) 50%, transparent 70%) 0 0 / 220% 100%;
+    animation: bench-shimmer 1.6s linear infinite;
+  }
+  .bench-caret::after {
+    content: "";
+    display: inline-block;
+    width: 2px;
+    height: 1em;
+    margin-inline-start: 2px;
+    vertical-align: -0.12em;
+    background: currentColor;
+    animation: pulse-soft 0.9s steps(2) infinite;
+  }
+
+  /* Assembly: the aligned frames settle into a ring, it turns once, then the piece spins on its own. */
+  .bench-ring-out {
+    animation: bench-ring-out 0.7s ease-in 3.5s forwards;
+  }
+  .bench-ring {
+    transform-style: preserve-3d;
+    animation: bench-ring-turn 3.2s cubic-bezier(0.45, 0, 0.2, 1) 0.6s both;
+  }
+  .bench-ring-item {
+    position: absolute;
+    left: calc(var(--s) / -2);
+    top: calc(var(--s) / -2);
+    width: var(--s);
+    height: var(--s);
+    backface-visibility: hidden;
+    transform: rotateY(var(--a)) translateZ(var(--r));
+    animation: bench-ring-in 0.9s var(--ease-out-soft) both;
+  }
+  .bench-turntable {
+    animation: bench-turntable-in 0.9s var(--ease-out-soft) 3.6s both;
+  }
+
+  /* Fidelity comparison: the divider sweeps on its own until the viewer drags it. */
+  .bench-sweep-clip {
+    animation: bench-sweep-clip 4.2s ease-in-out infinite alternate;
+  }
+  .bench-sweep-bar {
+    animation: bench-sweep-bar 4.2s ease-in-out infinite alternate;
+  }
+}
+
+@keyframes bench-develop {
+  from {
+    clip-path: inset(0 0 0 0);
+  }
+  to {
+    clip-path: inset(100% 0 0 0);
+  }
+}
+@keyframes bench-scan {
+  from {
+    transform: translateY(0);
+    opacity: 1;
+  }
+  85% {
+    opacity: 1;
+  }
+  to {
+    transform: translateY(100%);
+    opacity: 0;
+  }
+}
+@keyframes bench-fade {
+  from {
+    opacity: 0;
+    transform: scale(0.98);
+  }
+}
+@keyframes bench-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.4);
+  }
+}
+@keyframes bench-grow-x {
+  from {
+    transform: scaleX(0);
+  }
+}
+@keyframes bench-grow-y {
+  from {
+    transform: scaleY(0);
+  }
+}
+@keyframes bench-shimmer {
+  from {
+    background-position: 110% 0;
+  }
+  to {
+    background-position: -110% 0;
+  }
+}
+@keyframes bench-ring-in {
+  from {
+    opacity: 0;
+    transform: rotateY(var(--a)) translateZ(var(--r)) translateY(180%) scale(0.3);
+  }
+}
+@keyframes bench-ring-turn {
+  from {
+    transform: rotateX(-14deg) rotateY(0deg);
+  }
+  to {
+    transform: rotateX(-14deg) rotateY(-360deg);
+  }
+}
+@keyframes bench-ring-out {
+  to {
+    opacity: 0;
+    transform: scale(0.55);
+  }
+}
+@keyframes bench-turntable-in {
+  from {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+}
+@keyframes bench-sweep-clip {
+  from {
+    clip-path: inset(0 0 0 18%);
+  }
+  to {
+    clip-path: inset(0 0 0 82%);
+  }
+}
+@keyframes bench-sweep-bar {
+  from {
+    transform: translateX(18%);
+  }
+  to {
+    transform: translateX(82%);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

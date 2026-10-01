@@ -52,7 +52,10 @@ def start(event: dict) -> dict:
     try:
         table("TABLE_PRODUCTS").update_item(
             Key={"storeId": store["storeId"], "productId": product["productId"]},
-            UpdateExpression="SET #s = :processing, #step = :first, attempts = if_not_exists(attempts, :zero) + :one, photosDone = :zero REMOVE #err",
+            UpdateExpression=(
+                "SET #s = :processing, #step = :first, attempts = if_not_exists(attempts, :zero) + :one, photosDone = :zero "
+                "REMOVE #err, previews, alignedThumbs, fidelityReview"
+            ),
             ConditionExpression="#s IN (:uploading, :failed)",
             ExpressionAttributeNames={"#s": "status", "#step": "step", "#err": "error"},
             ExpressionAttributeValues={
@@ -77,6 +80,29 @@ def _url(key: str) -> str:
     return "/" + key.lstrip("/")
 
 
+def _live(product: dict, store: dict, step_index: int) -> dict:
+    """What the run has produced so far, for the processing screen. Only real outputs, never estimates.
+
+    previews: one entry per photo whose background is removed (photo and cutout at the same size), with its
+    fidelity score, or null when that photo was not scored. aligned: the aligned thumbnails, once aligned.
+    review: the fidelity threshold and the photos it set aside. brand: the store's palette once the brand step is done.
+    """
+    previews = {}
+    for p in product.get("previews") or []:  # a retried photo can appear twice: the last entry wins
+        previews[int(p["i"])] = {"index": int(p["i"]), "photo": _url(p["o"]), "cutout": _url(p["c"]), "fidelity": p.get("s")}
+    out = {
+        "previews": [previews[i] for i in sorted(previews)],
+        "aligned": [{"index": int(a["i"]), "thumb": _url(a["k"])} for a in sorted(product.get("alignedThumbs") or [], key=lambda a: int(a["i"]))],
+    }
+    review = product.get("fidelityReview")
+    if review:
+        out["review"] = {"threshold": review.get("threshold"), "dropped": [int(i) for i in review.get("dropped") or []]}
+    brand = store.get("brand") or {}
+    if step_index > STEPS.index("brand") and brand.get("colors"):
+        out["brand"] = brand
+    return out
+
+
 def status(event: dict) -> dict:
     path = event.get("pathParameters") or {}
     store = require_store(event, path.get("storeId"))
@@ -90,6 +116,8 @@ def status(event: dict) -> dict:
         "totalSteps": len(STEPS),
         "photos": {"done": int(product.get("photosDone", 0)), "total": int(product.get("photosTotal", len(product["rawKeys"])))},
     }
+    if current == "processing":
+        out["live"] = _live(product, store, out["stepIndex"])
     if current == "failed":
         out["error"] = product.get("error", {"code": "internal_error", "message": "Processing failed."})
     if current in ("ready_360", "ready_3d"):

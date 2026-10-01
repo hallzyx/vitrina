@@ -279,6 +279,69 @@ def test_listing_retries_then_falls_back_when_the_model_invents_claims(stubs):
     assert result["copy"]["es"]["description"] == "Jarrón pequeño"  # only what the artisan wrote
 
 
+def _live_objects():
+    listed = boto3.client("s3").list_objects_v2(Bucket="processed-bucket", Prefix=f"media/{STORE}/{PRODUCT}/live/")
+    return sorted(o["Key"] for o in listed.get("Contents", []))
+
+
+def test_each_finished_photo_leaves_a_progress_preview_with_its_real_score(stubs):
+    seed(8)
+    base = {"storeId": STORE, "productId": PRODUCT}
+    photos = [tasks.process_photo({**base, "photo": p}) for p in tasks.validate(base)["photos"]]
+    item = product()
+    previews = sorted(item["previews"], key=lambda p: p["i"])
+    assert [int(p["i"]) for p in previews] == list(range(1, 9)) and int(item["photosDone"]) == 8
+    for p, photo in zip(previews, photos):
+        assert p["o"] == f"media/{STORE}/{PRODUCT}/live/p{int(p['i']):02d}-o.webp"
+        # The score is exactly the one the run measured; unsampled photos stay unscored (None), never invented.
+        assert (None if p["s"] is None else float(p["s"])) == photo["fidelity"]
+    assert [p["s"] is None for p in previews] == [False, True] * 4
+
+    s3 = boto3.client("s3")
+    head = s3.head_object(Bucket="processed-bucket", Key=previews[0]["c"])
+    assert head["ContentType"] == "image/webp" and head["CacheControl"].startswith("private")
+    original = Image.open(io.BytesIO(s3.get_object(Bucket="processed-bucket", Key=previews[0]["o"])["Body"].read()))
+    cutout = Image.open(io.BytesIO(s3.get_object(Bucket="processed-bucket", Key=previews[0]["c"])["Body"].read()))
+    assert original.size == cutout.size and max(cutout.size) == 480  # the cutout overlays the photo exactly
+    assert cutout.mode == "RGBA" and np.asarray(cutout)[..., 3].min() == 0
+
+    aligned = tasks.align({**base, "photos": photos})
+    assert [int(a["i"]) for a in product()["alignedThumbs"]] == list(range(1, 9))
+    tasks.fidelity({**base, "frames": aligned["frames"]})
+    review = product()["fidelityReview"]
+    assert review["dropped"] == [] and 0.8 <= float(review["threshold"]) <= 1
+
+
+def test_the_previews_are_removed_when_the_run_ends(stubs):
+    seed(8)
+    run_pipeline()
+    item = product()
+    assert item["status"] == "ready_360"
+    assert not {"previews", "alignedThumbs", "fidelityReview"} & set(item)
+    assert _live_objects() == []
+    assert len(item["frameKeys"]) == 8  # the frames themselves are untouched
+
+
+def test_the_previews_are_removed_when_the_run_fails(stubs):
+    seed(8)
+    base = {"storeId": STORE, "productId": PRODUCT}
+    for p in tasks.validate(base)["photos"]:
+        tasks.process_photo({**base, "photo": p})
+    assert len(_live_objects()) == 16
+    tasks.fail({**base, "error": {"Error": "States.Timeout", "Cause": ""}})
+    item = product()
+    assert item["status"] == "failed" and "previews" not in item
+    assert _live_objects() == []
+
+
+def test_a_preview_that_cannot_be_written_does_not_fail_the_photo(stubs, monkeypatch):
+    seed(8)
+    monkeypatch.setattr(tasks.imaging, "preview_pair", lambda *a, **k: (_ for _ in ()).throw(OSError("disk")))
+    base = {"storeId": STORE, "productId": PRODUCT}
+    result = tasks.process_photo({**base, "photo": tasks.validate(base)["photos"][0]})
+    assert result["ok"] is True and int(product()["photosDone"]) == 1 and product()["previews"] == []
+
+
 def test_fail_task_records_a_translatable_code(stubs):
     seed(8)
     cause = '{"errorMessage": "not_enough_photos: Only 3 of 12 photos are usable.", "errorType": "PipelineError"}'

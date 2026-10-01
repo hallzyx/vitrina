@@ -106,6 +106,64 @@ def test_status_of_a_ready_product_includes_frames_copy_and_brand(monkeypatch):
     )
     code, body = status(store, path)
     assert code == 200 and body["frames"] == ["/media/a/f01.webp"] and body["copy"]["en"]["name"] == "Vase"
+    assert "live" not in body  # progress previews only exist while the run is in flight
+
+
+def test_status_while_processing_lists_the_real_progress_previews(monkeypatch):
+    from decimal import Decimal
+
+    _, store, _, path = setup_product(monkeypatch)
+    start(store, path)
+    key = {"storeId": path["storeId"], "productId": path["productId"]}
+    base = f"media/{path['storeId']}/{path['productId']}/live"
+    preview = lambda i, s: {"i": i, "o": f"{base}/p{i:02d}-o.webp", "c": f"{base}/p{i:02d}-c.webp", "s": s}  # noqa: E731
+    products_table = boto3.resource("dynamodb").Table("products")
+    products_table.update_item(
+        Key=key,
+        UpdateExpression="SET #step = :s, previews = :p",
+        ExpressionAttributeNames={"#step": "step"},
+        # Photo 2 arrives twice (a retried task): it is listed once.
+        ExpressionAttributeValues={":s": "background", ":p": [preview(2, None), preview(1, Decimal("0.97")), preview(2, None)]},
+    )
+    boto3.resource("dynamodb").Table("stores").update_item(
+        Key={"storeId": path["storeId"]}, UpdateExpression="SET brand = :b", ExpressionAttributeValues={":b": {"colors": ["#aa5533"], "tone": "warm"}}
+    )
+    code, body = status(store, path)
+    live = body["live"]
+    assert code == 200 and [p["index"] for p in live["previews"]] == [1, 2]
+    assert live["previews"][0] == {"index": 1, "photo": f"/{base}/p01-o.webp", "cutout": f"/{base}/p01-c.webp", "fidelity": 0.97}
+    assert live["previews"][1]["fidelity"] is None  # not scored, and said so
+    assert live["aligned"] == [] and "review" not in live and "brand" not in live  # the brand step has not run yet
+
+    products_table.update_item(
+        Key=key,
+        UpdateExpression="SET #step = :s, alignedThumbs = :a, fidelityReview = :r",
+        ExpressionAttributeNames={"#step": "step"},
+        ExpressionAttributeValues={
+            ":s": "listing",
+            ":a": [{"i": 2, "k": "media/x/t02.webp"}, {"i": 1, "k": "media/x/t01.webp"}],
+            ":r": {"threshold": Decimal("0.92"), "dropped": [2]},
+        },
+    )
+    live = status(store, path)[1]["live"]
+    assert live["aligned"] == [{"index": 1, "thumb": "/media/x/t01.webp"}, {"index": 2, "thumb": "/media/x/t02.webp"}]
+    assert live["review"] == {"threshold": 0.92, "dropped": [2]}
+    assert live["brand"]["colors"] == ["#aa5533"]
+
+
+def test_a_retried_run_starts_without_the_previous_previews(monkeypatch):
+    _, store, _, path = setup_product(monkeypatch)
+    table = boto3.resource("dynamodb").Table("products")
+    key = {"storeId": path["storeId"], "productId": path["productId"]}
+    table.update_item(
+        Key=key,
+        UpdateExpression="SET #s = :f, previews = :p, alignedThumbs = :p",
+        ExpressionAttributeNames={"#s": "status"},
+        ExpressionAttributeValues={":f": "failed", ":p": [{"i": 1, "o": "media/a/o.webp", "c": "media/a/c.webp", "s": None}]},
+    )
+    assert start(store, path)[0] == 202
+    live = status(store, path)[1]["live"]
+    assert live["previews"] == [] and live["aligned"] == []
 
 
 def test_failed_status_carries_a_code(monkeypatch):

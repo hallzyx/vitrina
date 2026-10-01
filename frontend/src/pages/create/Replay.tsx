@@ -4,8 +4,18 @@ import { DemoBadge, FidelityLine, RecordedNote } from "../../components/Chrome";
 import { ProgressBar, StepList } from "../../components/Pipeline";
 import { btn, card } from "../../components/ui";
 import { Viewer360 } from "../../components/Viewer360";
+import { DONE, frameIndex, STEP, type BenchModel, type BenchPhoto } from "../../components/workbench/model";
+import { Workbench } from "../../components/workbench/Workbench";
 import { useI18n } from "../../i18n";
-import { PIPELINE_STEPS, type Lang, type PipelineStep, type PublicProduct, type PublicStore, type ReplayTimings } from "../../lib/api";
+import {
+  PIPELINE_STEPS,
+  samplePhoto,
+  type Lang,
+  type PipelineStep,
+  type PublicProduct,
+  type PublicStore,
+  type ReplayTimings,
+} from "../../lib/api";
 import { hasPrice, productText } from "../../lib/product";
 import { Actions, ScreenTitle } from "./shared";
 
@@ -36,19 +46,44 @@ function seconds(ms: number, lang: Lang): string {
   return `${(ms / 1000).toLocaleString(lang === "es" ? "es-PE" : "en-US", { maximumFractionDigits: 1, minimumFractionDigits: 1 })} s`;
 }
 
+/** The recorded run as workbench data: its real frames, sample photos, scores, palette and listing, revealed step by step. */
+function replayModel(store: PublicStore, product: PublicProduct, step: number): BenchModel {
+  const photos: BenchPhoto[] = product.frames.map((frame, i) => {
+    const index = frameIndex(frame) ?? i + 1;
+    return {
+      index,
+      photo: product.sampleId ? samplePhoto(product.sampleId, index) : undefined,
+      cutout: product.thumbs[i] ?? frame,
+      // The recorded cutout is the aligned frame, not framed like the photo, and per-photo scores were not recorded.
+      overlay: false,
+      fidelity: undefined,
+    };
+  });
+  return {
+    mode: "replay",
+    step,
+    failed: false,
+    slots: photos.length,
+    photos: step >= STEP.background ? photos : [],
+    spin: step > STEP.align ? product.thumbs : [],
+    dropped: [],
+    overall: step > STEP.fidelity ? { score: product.fidelityScore, checked: product.fidelityChecked, frames: product.frames.length } : undefined,
+    brand: step > STEP.brand ? store.brand : undefined,
+    copy: step >= DONE ? product.copy : undefined,
+  };
+}
+
 /** Animates the seven steps with the real timings of a recorded run. Clearly labeled as a replay. */
-export function ReplayProcessing({ product, onDone }: { product: PublicProduct; onDone: () => void }) {
+export function ReplayProcessing({ store, product, onDone }: { store: PublicStore; product: PublicProduct; onDone: () => void }) {
   const { t, lang } = useI18n();
   const plan = useMemo(() => replayPlan(product.replay ?? { totalMs: 0, steps: [] }), [product]);
   const [index, setIndex] = useState(0);
-  const onDoneRef = useRef(onDone);
-  onDoneRef.current = onDone;
+  const [broken, setBroken] = useState(false);
+  const stepStartedAt = useRef(Date.now());
 
   useEffect(() => {
-    if (index >= plan.length) {
-      const id = window.setTimeout(() => onDoneRef.current(), 1200);
-      return () => window.clearTimeout(id);
-    }
+    stepStartedAt.current = Date.now();
+    if (index >= plan.length) return;
     const id = window.setTimeout(() => setIndex((i) => i + 1), plan[index].shownMs);
     return () => window.clearTimeout(id);
   }, [index, plan]);
@@ -59,16 +94,36 @@ export function ReplayProcessing({ product, onDone }: { product: PublicProduct; 
   });
   const totalMs = product.replay?.totalMs || plan.reduce((sum, p) => sum + p.recordedMs, 0);
   const done = index >= plan.length;
+  const model = useMemo(() => replayModel(store, product, index), [store, product, index]);
+  // The clock shows the recorded run's time, advanced in proportion through the (sped-up) step on screen.
+  const recordedClock = () => {
+    const before = plan.slice(0, index).reduce((sum, p) => sum + p.recordedMs, 0);
+    if (done) return totalMs || before;
+    const share = Math.min(1, (Date.now() - stepStartedAt.current) / plan[index].shownMs);
+    return before + share * plan[index].recordedMs;
+  };
+  const current = plan[Math.min(index, plan.length - 1)];
+  const note = !done && current.recordedMs > 0 ? t("bench.recordedStep", { time: seconds(current.recordedMs, lang) }) : undefined;
+  const dripMs = Math.max(120, Math.min(380, (plan[STEP.background]?.shownMs ?? 2000) / Math.max(1, product.frames.length)));
 
   return (
     <section>
       <ScreenTitle>{t("replay.title")}</ScreenTitle>
       <RecordedNote>{t("replay.banner")}</RecordedNote>
-      <ProgressBar percent={(index / plan.length) * 100} label={t("replay.title")} />
+      <div className="mb-3 mt-2.5">
+        <DemoBadge />
+      </div>
       <p className="sr-only" role="status" aria-live="polite">
         {done ? t("processing.readyTitle") : t(`processing.${plan[index].step}` as const)}
       </p>
-      <StepList current={index} detail={detail} />
+      {broken || product.frames.length === 0 ? (
+        <>
+          <ProgressBar percent={(index / plan.length) * 100} label={t("replay.title")} />
+          <StepList current={index} detail={detail} />
+        </>
+      ) : (
+        <Workbench model={model} clock={recordedClock} dripMs={dripMs} onBroken={() => setBroken(true)} stepDetail={detail} note={note} />
+      )}
       <p className="mt-4 text-sm text-ink-soft">{t("replay.total", { time: seconds(totalMs, lang) })}</p>
       <Actions>
         <button type="button" className={btn(done ? "primary" : "ghost", "md", done ? "flex-1" : "")} onClick={onDone}>
