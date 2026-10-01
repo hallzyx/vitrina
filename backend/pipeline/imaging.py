@@ -100,13 +100,26 @@ def align_layout(boxes, size: int = FRAME_SIZE, fill: float = 0.84) -> dict:
     else:
         axis_x, axis_y = centers, bases
 
+    # A hand-held camera drifts closer and farther, so the piece looks bigger in some photos. Bring each
+    # frame's height to the set's median, scaling about its floor line, when it is off by more than 1.5%.
+    # Pure resizing: no pixel is invented. With a steady camera only a small spread (up to 12%) is treated as
+    # distance wobble; larger changes in height are the piece's own geometry (a raised trunk, a wide basket
+    # seen from above) and must not be flattened.
+    factors = [1.0] * n
+    if not steady or max(heights) / max(min(heights), 1) <= 1.12:
+        target = statistics.median(heights)
+        for i, h in enumerate(heights):
+            ratio = target / max(h, 1)
+            if abs(ratio - 1) > 0.015:
+                factors[i] = min(1.25, max(0.8, ratio))
+
     def relative(s: float):
         """Top-left of each piece relative to the shared axis and floor line, and the union of all frames."""
-        rel = [((x0 - axis_x[i]) * s, (y0 - axis_y[i]) * s) for i, (x0, y0, _, _) in enumerate(boxes)]
+        rel = [((x0 - axis_x[i]) * s * factors[i], (y0 - axis_y[i]) * s * factors[i]) for i, (x0, y0, _, _) in enumerate(boxes)]
         left = min(x for x, _ in rel)
-        right = max(x + w * s for (x, _), w in zip(rel, widths))
+        right = max(x + w * s * f for (x, _), w, f in zip(rel, widths, factors))
         top = min(y for _, y in rel)
-        bottom = max(y + h * s for (_, y), h in zip(rel, heights))
+        bottom = max(y + h * s * f for (_, y), h, f in zip(rel, heights, factors))
         return rel, left, right, top, bottom
 
     # Perspective can push a frame below the shared floor line (a nearer foot sits lower in the image),
@@ -118,7 +131,12 @@ def align_layout(boxes, size: int = FRAME_SIZE, fill: float = 0.84) -> dict:
         rel, left, right, top, bottom = relative(scale)
     shift_x, shift_y = size / 2 - (left + right) / 2, size / 2 - (top + bottom) / 2
     placements = [(round(x + shift_x), round(y + shift_y)) for x, y in rel]
-    return {"scale": scale, "mode": "steady" if steady else "handheld", "placements": placements}
+    return {
+        "scale": scale,
+        "scales": [scale * f for f in factors],
+        "mode": "steady" if steady else "handheld",
+        "placements": placements,
+    }
 
 
 def render_frame(cutout: Image.Image, box, scale: float, position, size: int = FRAME_SIZE) -> Image.Image:

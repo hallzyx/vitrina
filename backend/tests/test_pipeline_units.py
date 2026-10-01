@@ -75,6 +75,44 @@ def test_align_layout_recenters_frames_from_a_handheld_camera():
     assert len(layout["placements"]) == len(boxes)
 
 
+def test_a_handheld_camera_gets_one_apparent_size_without_moving_the_floor_line():
+    """Photos taken closer or farther make the piece look bigger or smaller: sizes are brought to the median height."""
+    heights = [800, 860, 790, 805, 1000, 795, 810, 700]
+    boxes = [(300 + 12 * i, 900 - h, 420 + 12 * i, 900) for i, h in enumerate(heights)]
+    layout = imaging.align_layout(boxes)
+    assert layout["mode"] == "handheld"
+    shown = [(b[3] - b[1]) * s for b, s in zip(boxes, layout["scales"])]
+    assert max(shown) / min(shown) < 1.30  # was 1.43 before; the clamp keeps one extreme photo from distorting the set
+    close = [(b[3] - b[1]) * s for b, s in zip(boxes, layout["scales"]) if abs(b[3] - b[1] - 800) <= 60]
+    assert max(close) / min(close) < 1.04
+
+
+def test_real_phone_photos_with_a_small_height_wobble_are_brought_to_one_size():
+    """Boxes measured on 12 real photos of a bottle (the camera looked steady, the height wobbled by 9%)."""
+    boxes = [
+        (195, 57, 468, 967), (202, 0, 516, 986), (226, 20, 544, 982), (224, 64, 532, 968),
+        (235, 52, 551, 968), (254, 78, 568, 985), (229, 12, 563, 982), (198, 54, 536, 1002),
+        (192, 60, 530, 994), (210, 25, 549, 970), (175, 30, 524, 989), (183, 88, 506, 1012),
+    ]
+    layout = imaging.align_layout(boxes)
+    shown = [(b[3] - b[1]) * s for b, s in zip(boxes, layout["scales"])]
+    assert max(shown) / min(shown) < 1.04  # 1.09 before
+
+
+def test_a_piece_whose_own_height_changes_a_lot_is_not_flattened():
+    """A carved elephant seen from different angles legitimately changes height by far more than 12%."""
+    heights = [500, 560, 640, 700, 720, 690, 620, 560, 520, 540, 600, 660]
+    boxes = [(300, 800 - h, 500, 800) for h in heights]
+    layout = imaging.align_layout(boxes)
+    assert layout["mode"] == "steady" and set(layout["scales"]) == {layout["scale"]}
+
+
+def test_a_steady_camera_keeps_one_scale_for_every_frame():
+    boxes = [(400 - w // 2, 200, 400 + w // 2, 700) for w in (300, 340, 380, 340, 300, 340)]
+    layout = imaging.align_layout(boxes)
+    assert set(layout["scales"]) == {layout["scale"]}
+
+
 def test_palette_follows_the_dominant_vivid_color():
     red = np.tile(np.array([[190, 50, 40]], dtype=np.uint8), (900, 1))
     beige = np.tile(np.array([[220, 200, 170]], dtype=np.uint8), (300, 1))

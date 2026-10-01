@@ -193,10 +193,10 @@ def align(event: dict) -> dict:
     layout = imaging.align_layout([tuple(c["box"]) for c in cutouts])
 
     def build(item):
-        cut, position = item
+        cut, position, scale = item
         index = cut["index"]
         cutout = Image.open(io.BytesIO(read_s3(processed_bucket(), cut_key(store_id, product_id, index)))).convert("RGBA")
-        frame = imaging.render_frame(cutout, tuple(cut["box"]), layout["scale"], position)
+        frame = imaging.render_frame(cutout, tuple(cut["box"]), scale, position)
         thumb = frame.resize((imaging.THUMB_SIZE, imaging.THUMB_SIZE), Image.LANCZOS)
         immutable = "public, max-age=31536000, immutable"
         put_s3(processed_bucket(), frame_key(store_id, product_id, index), imaging.webp_bytes(frame), "image/webp", immutable)
@@ -209,7 +209,7 @@ def align(event: dict) -> dict:
         }
 
     with ThreadPoolExecutor(WORKERS) as pool:
-        frames = list(pool.map(build, zip(cutouts, layout["placements"])))
+        frames = list(pool.map(build, zip(cutouts, layout["placements"], layout["scales"])))
     # The aligned thumbnails let the processing screen spin the piece before the run is finished.
     table("TABLE_PRODUCTS").update_item(
         Key=product_key(store_id, product_id),
@@ -237,7 +237,14 @@ def fidelity(event: dict) -> dict:
     threshold = None
     if scored:
         median = statistics.median(f["fidelity"] for f in scored)
-        threshold = round(max(floor, median - env_float("FIDELITY_MAX_DROP", 0.05)), 4)
+        margin = env_float("FIDELITY_MAX_DROP", 0.05)
+        if len(scored) >= 4:
+            # Phone photos of dark or glossy pieces score with more natural spread than a studio set (a
+            # correct cutout of a black bottle scored 0.86-0.94). Widen the margin to 2.5 robust sigmas
+            # of this set's own spread, up to a cap; tight sets keep the base margin.
+            spread = 1.4826 * statistics.median(abs(f["fidelity"] - median) for f in scored)
+            margin = min(env_float("FIDELITY_MAX_MARGIN", 0.10), max(margin, 2.5 * spread))
+        threshold = round(max(floor, median - margin), 4)
     kept = [f for f in frames if f.get("fidelity") is None or f["fidelity"] >= threshold]
     dropped = [f for f in frames if f.get("fidelity") is not None and f["fidelity"] < threshold]
     minimum = env_int("MIN_PHOTOS", 6)

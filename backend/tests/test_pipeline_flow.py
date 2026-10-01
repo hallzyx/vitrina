@@ -245,6 +245,20 @@ def test_a_uniformly_lower_baseline_does_not_drop_good_frames(stubs):
     assert tasks.fidelity({**base, "frames": frames})["dropped"] == []
 
 
+def test_noisy_scores_from_phone_photos_widen_the_margin_but_a_damaged_frame_is_still_dropped(stubs):
+    """Measured on real photos of a dark bottle: correct cutouts scored 0.855-0.94. Tight sets keep the 0.05 margin."""
+    base = {"storeId": STORE, "productId": PRODUCT}
+    seed(10)
+    scores = [0.912, 0.8582, 0.8555, 0.9143, 0.9387, 0.9278, None, None, None, None]
+    frames = [
+        {"index": i, "frameKey": f"media/{STORE}/{PRODUCT}/f{i:02d}.webp", "thumbKey": f"media/{STORE}/{PRODUCT}/t{i:02d}.webp", "fidelity": s}
+        for i, s in enumerate(scores, start=1)
+    ]
+    assert tasks.fidelity({**base, "frames": frames})["dropped"] == []  # these were correct cutouts
+    frames[1]["fidelity"] = 0.80  # a frame at the floor of the noisy set is still caught
+    assert tasks.fidelity({**base, "frames": frames})["dropped"] == [2]
+
+
 def test_fidelity_fails_the_product_when_too_few_frames_remain(stubs):
     base = {"storeId": STORE, "productId": PRODUCT}
     seed(8)
